@@ -173,9 +173,10 @@ describe('tracker state machine', () => {
     tracker.stop()
   })
 
-  it('sequential mode: a block read and scrolled to the top releases focus', async () => {
+  it('sequential mode: a deep block scrolled to the top releases focus', async () => {
     const onRead = vi.fn()
     Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true })   // lineY = 200
+    Object.defineProperty(window, 'scrollY', { value: 2000, configurable: true })      // scrolled deep into the page
     const tracker = createTracker({
       gates: [{ isOpen: () => true }],
       requiredMs: () => 10_000,   // long, so nothing fires — we inspect which block accumulates
@@ -186,19 +187,39 @@ describe('tracker state machine', () => {
     tracker.start()
     document.body.innerHTML = `<p>A</p><p>B</p>`
     const [a, b] = document.body.children
-    // Both arrive from below the reading line; A is topmost → focus.
-    a.getBoundingClientRect = () => ({ top: 300, bottom: 600, height: 300 })
-    b.getBoundingClientRect = () => ({ top: 650, bottom: 950, height: 300 })
+    // A is read and scrolled to the very top (middle above the line); both are deep
+    // in the document (docTop = top + scrollY >> viewport), so not above-the-fold.
+    a.getBoundingClientRect = () => ({ top: -250, bottom: 50, height: 300 })   // center -100 ≤ 200 → released
+    b.getBoundingClientRect = () => ({ top: 150, bottom: 450, height: 300 })   // center 300 > 200 → focus
     tracker.observe(a); tracker.observe(b)
     FakeIO.last.trigger(a, 1.0); FakeIO.last.trigger(b, 1.0)
-    await new Promise(r => setTimeout(r, 40))
-    expect([...tracker._active]).toContain(a)
-    // A is read and scrolled to the very top (middle above the line); B is now in view.
-    a.getBoundingClientRect = () => ({ top: -250, bottom: 50, height: 300 })
-    b.getBoundingClientRect = () => ({ top: 150, bottom: 450, height: 300 })
-    await new Promise(r => setTimeout(r, 40))
-    expect([...tracker._active]).toContain(b)       // focus moved to B
+    await new Promise(r => setTimeout(r, 60))
+    expect([...tracker._active]).toContain(b)       // focus on the block still on screen
     expect([...tracker._active]).not.toContain(a)   // A released, not blocking
+    tracker.stop()
+  })
+
+  it('sequential mode: an above-the-fold block at the top still counts', async () => {
+    const onRead = vi.fn()
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true })
+    Object.defineProperty(window, 'scrollY', { value: 0, configurable: true })   // page at the very top
+    const tracker = createTracker({
+      gates: [{ isOpen: () => true }],
+      requiredMs: () => 10_000,
+      buildPayload: (el) => ({ text: el.textContent }),
+      onRead,
+      options: { tickMs: 20, sequential: true, readingLineRatio: 0.25 },
+    })
+    tracker.start()
+    document.body.innerHTML = `<p>A</p><p>B</p>`
+    const [a, b] = document.body.children
+    // A sits in the top 25% but is first-screen content (docTop < viewport) → not released.
+    a.getBoundingClientRect = () => ({ top: 20, bottom: 140, height: 120 })   // center 80 ≤ 200 but above-the-fold
+    b.getBoundingClientRect = () => ({ top: 160, bottom: 280, height: 120 })
+    tracker.observe(a); tracker.observe(b)
+    FakeIO.last.trigger(a, 1.0); FakeIO.last.trigger(b, 1.0)
+    await new Promise(r => setTimeout(r, 60))
+    expect([...tracker._active]).toContain(a)       // above-the-fold block still tracked
     tracker.stop()
   })
 

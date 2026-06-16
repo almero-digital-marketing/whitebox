@@ -15,9 +15,10 @@
 //     out of view), focus advances to the next element down. Used for text.
 //     With a sequentialGroup(el) key, each group gets its own independent focus
 //     (e.g. headings and paragraphs read as separate top-to-bottom queues).
-//     A block that arrived from below and has scrolled up so its middle rises
-//     above readingLineRatio of the viewport releases focus — so a block at the
-//     very top doesn't keep blocking blocks still on screen below it.
+//     A block past the document's first screen releases focus once its middle
+//     rises above readingLineRatio of the viewport — so a block you've read and
+//     scrolled to the top doesn't keep blocking blocks still on screen below it.
+//     First-screen (above-the-fold) blocks always count.
 //
 // Domain specifics (text vs image vs …) come from injected hooks:
 //   - requiredMs(el)            — how much time defines "read"
@@ -71,7 +72,6 @@ export default function createTracker({
       accumulated_ms: 0,
       reading: false,
       visible: false,
-      enteredFromBelow: false,   // has appeared below the reading line at least once
       last_tick_at: 0,
       fired: false,
     }
@@ -124,6 +124,7 @@ export default function createTracker({
   // back to observe order, which is DOM order.
   function pickFocus() {
     const vh = typeof window !== 'undefined' ? window.innerHeight : 0
+    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0
     const lineY = cfg.readingLineRatio > 0 ? cfg.readingLineRatio * vh : 0
     const best = new Map()   // groupKey -> { s, top }
     for (const el of observed) {
@@ -131,13 +132,14 @@ export default function createTracker({
       if (!s || s.fired || !s.visible) continue
       const rect = el.getBoundingClientRect()
       if (lineY > 0 && rect.height > 0) {
-        // A block that appears below the reading line is "arriving from below".
-        if (rect.top >= lineY) s.enteredFromBelow = true
-        // Once it has scrolled up so its middle is above the line, you've read
-        // past it — release focus so a block at the very top doesn't keep
-        // blocking blocks still on screen below it. (Above-the-fold blocks never
-        // arrived from below, so they're never released early this way.)
-        if (s.enteredFromBelow && (rect.top + rect.bottom) / 2 <= lineY) continue
+        // Above-the-fold blocks (in the document's first screen) always count —
+        // they're never released by the reading line. Anything further down
+        // releases focus once you've scrolled it up so its middle passes above
+        // the line: a block you've read and pushed to the top stops blocking
+        // blocks still on screen below it. Keying off document position (not
+        // viewport position) makes this hold on a mid-page refresh too.
+        const aboveFold = rect.top + scrollY < vh
+        if (!aboveFold && (rect.top + rect.bottom) / 2 <= lineY) continue
       }
       const key = sequentialGroup ? sequentialGroup(el) : ''
       const cur = best.get(key)
