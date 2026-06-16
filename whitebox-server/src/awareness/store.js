@@ -1,0 +1,137 @@
+const EXPOSURES = 'whitebox_awareness_exposures'
+const CHUNKS = 'whitebox_awareness_chunks'
+const SESSIONS = 'whitebox_sessions'
+
+const SESSION_COLS = [
+  's.utm_source',
+  's.utm_medium',
+  's.utm_campaign',
+  's.utm_term',
+  's.utm_content',
+  's.referrer',
+]
+
+function toVectorLiteral(arr) {
+  return `[${arr.join(',')}]`
+}
+
+// Dependencies captured once via init() — module-level singleton, no
+// wrapping factory closure. Matches the core pattern (passports, sessions, …).
+let db
+
+export function init(deps) {
+  db = deps.db
+}
+
+export async function insertExposure(data) {
+  const [row] = await db(EXPOSURES).insert(data).returning('*')
+  return row
+}
+
+export async function findExposure(id) {
+  return db(EXPOSURES).where({ id }).first()
+}
+
+export async function deletePassport(passportId) {
+  return db(EXPOSURES).where({ passport_id: passportId }).del()
+}
+
+export async function timeline({ passport_id, from, to, channels, directions }) {
+  let q = db(EXPOSURES + ' as e')
+    .leftJoin(SESSIONS + ' as s', 's.id', 'e.session_id')
+    .where('e.passport_id', passport_id)
+    .select('e.*', ...SESSION_COLS)
+  if (from) q = q.where('e.ts', '>=', from)
+  if (to) q = q.where('e.ts', '<=', to)
+  if (channels?.length) q = q.whereIn('e.channel', channels)
+  if (directions?.length) q = q.whereIn('e.direction', directions)
+  return q.orderBy('e.ts', 'desc')
+}
+
+export async function hasChunks(contentHash) {
+  if (!contentHash) return false
+  const row = await db(CHUNKS).where({ content_hash: contentHash }).first()
+  return !!row
+}
+
+// chunks: [{ text, embedding }]  — content_hash applied uniformly
+export async function insertChunks(contentHash, chunks) {
+  if (!chunks.length) return
+  await db(CHUNKS)
+    .insert(chunks.map((c, i) => ({
+      content_hash: contentHash,
+      chunk_index: i,
+      chunk_text: c.text,
+      embedding: toVectorLiteral(c.embedding),
+    })))
+    .onConflict(['content_hash', 'chunk_index'])
+    .ignore()
+}
+
+// Delete chunks whose content_hash is no longer referenced by any exposure.
+// Returns number of orphan chunks removed.
+export async function gcOrphanChunks() {
+  const result = await db.raw(
+    `DELETE FROM ${CHUNKS}
+     WHERE content_hash NOT IN (SELECT DISTINCT content_hash FROM ${EXPOSURES} WHERE content_hash IS NOT NULL)`
+  )
+  return result.rowCount ?? 0
+}
+
+// Recall: chunks scoped to a passport via exposures.content_hash join.
+//
+// A passport can have many exposures sharing one content_hash (saw the same
+// email twice, revisited a page). A naive chunk⋈exposure join would emit one
+// row per (chunk, exposure) pair, so a single chunk would repeat and crowd
+// the top-K evidence window. We collapse each content_hash to its most-recent
+// exposure first (DISTINCT ON), so every chunk appears exactly once, carrying
+// the metadata of the latest time the passport saw it. Ordering is then a pure
+// vector-distance sort over the (small, per-passport) chunk set.
+export async function recallChunks({ passport_id, embedding, limit = 10 }) {
+  const v = toVectorLiteral(embedding)
+  const result = await db.raw(
+      `SELECT
+         c.id, c.content_hash, c.chunk_text,
+         e.ts, e.passport_id, e.channel, e.direction, e.source, e.content_id, e.content_url,
+         s.utm_source, s.utm_medium, s.utm_campaign, s.utm_term, s.utm_content, s.referrer,
+         1 - (c.embedding <=> ?::vector) AS similarity
+       FROM ${CHUNKS} c
+       JOIN (
+         SELECT DISTINCT ON (content_hash)
+           content_hash, ts, passport_id, channel, direction, source, content_id, content_url, session_id
+         FROM ${EXPOSURES}
+         WHERE passport_id = ?
+         ORDER BY content_hash, ts DESC
+       ) e ON e.content_hash = c.content_hash
+       LEFT JOIN ${SESSIONS} s ON s.id = e.session_id
+       ORDER BY c.embedding <=> ?::vector
+       LIMIT ?`,
+    [v, passport_id, v, limit]
+  )
+  return result.rows ?? result
+}
+
+// Population: matching chunks first (HNSW-efficient), then resolve to passports.
+export async function populationChunks({ embedding, similarity = 0.75, limit = 1000 }) {
+  const v = toVectorLiteral(embedding)
+  const result = await db.raw(
+      `WITH matches AS (
+         SELECT id, chunk_text, content_hash, 1 - (embedding <=> ?::vector) AS similarity
+         FROM ${CHUNKS}
+         WHERE 1 - (embedding <=> ?::vector) >= ?
+         ORDER BY embedding <=> ?::vector
+         LIMIT ?
+       )
+       SELECT DISTINCT
+         e.passport_id, m.chunk_text, m.similarity, e.ts,
+         e.channel, e.direction, e.source,
+         s.utm_source, s.utm_medium, s.utm_campaign,
+         s.utm_term, s.utm_content, s.referrer
+       FROM matches m
+       JOIN ${EXPOSURES} e ON e.content_hash = m.content_hash
+       LEFT JOIN ${SESSIONS} s ON s.id = e.session_id
+       ORDER BY m.similarity DESC`,
+    [v, v, similarity, v, limit]
+  )
+  return result.rows ?? result
+}

@@ -1,0 +1,5 @@
+node_modules/
+whitebox.config.js
+.env
+.env.*
+*.log

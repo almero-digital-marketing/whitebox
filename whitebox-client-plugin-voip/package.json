@@ -1,0 +1,25 @@
+{
+  "name": "whitebox-client-plugin-voip",
+  "version": "0.1.0",
+  "description": "Whitebox browser client — voip plugin",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "whitebox-client": "*"
+  },
+  "devDependencies": {
+    "happy-dom": "^15.0.0",
+    "vitest": "^2.1.0"
+  }
+}

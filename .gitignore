@@ -1,0 +1,32 @@
+# ── Dependencies ──────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ── Build output ──────────────────────────────────────────────
+dist/
+**/dist/
+*.tgz
+
+# ── Secrets / local config — NEVER commit ─────────────────────
+# Real runtime config carries live DB / OpenAI / Mailgun / PBX secrets.
+# Only the *.example template is tracked.
+**/whitebox.config.js
+# Test + runtime env files (Neon API key, etc). Only *.example is tracked.
+.env
+.env.*
+!.env.example
+!.env.test.example
+*.pem
+*.key
+.npmrc
+
+# ── Legacy (kept on disk for reference, never in this repo) ────
+whitebox-v1/
+
+# ── Tooling noise ─────────────────────────────────────────────
+.DS_Store
+*.log
+coverage/
+.vitest/
+.idea/
+.vscode/

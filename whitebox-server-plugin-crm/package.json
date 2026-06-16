@@ -1,0 +1,25 @@
+{
+  "name": "whitebox-server-plugin-crm",
+  "version": "0.1.0",
+  "description": "CRM webhook ingestion for whitebox — records + facts from external systems, linked to passports.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "whitebox-server": "*"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "libphonenumber-js": "^1.11.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ]
+}

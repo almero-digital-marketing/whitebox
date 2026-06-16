@@ -1,0 +1,126 @@
+import path from 'path'
+import crypto from 'crypto'
+import { fileURLToPath } from 'url'
+
+import * as store from './store.js'
+import * as memory from './memory.js'
+import * as query from './query.js'
+import createNotify from '../notify.js'
+import { redact } from './pii.js'
+
+function hashContent(text) {
+  return crypto.createHash('sha256').update(text).digest('hex')
+}
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// Dependencies / state captured once via init() — module-level singleton, no
+// wrapping factory closure. Matches the core pattern (passports, sessions, …).
+// notify is a per-consumer factory (per-webhooks config) so it stays a created
+// instance held at module level.
+let db
+let logger
+let enabled
+let redactPii
+let notify
+
+export function init(deps) {
+  db = deps.db
+  logger = deps.logger.child({ core: 'awareness' })
+  const cfg = deps.config.awareness || {}
+  enabled = cfg.enabled !== false
+  redactPii = cfg.pii?.redact !== false
+
+  ;({ notify } = createNotify({ webhooksConfig: cfg.webhooks, events: deps.events, webhooks: deps.webhooks }))
+
+  store.init({ db })
+  if (enabled) memory.init({ store, openai: deps.openai, queue: deps.queue, config: deps.config, logger })
+  query.init({ store, openai: deps.openai, logger })
+}
+
+export async function migrate() {
+  await db.migrate.latest({
+    directory: path.join(__dirname, 'migrations'),
+    tableName: 'whitebox_awareness_migrations',
+  })
+}
+
+export async function record(event) {
+  if (!enabled) return null
+  if (!event.passport_id || !event.text || !event.channel || !event.direction) {
+    logger.warn({ event }, 'Awareness record missing required fields')
+    return null
+  }
+
+  const text = redactPii ? redact(event.text) : event.text
+  const content_hash = hashContent(text)
+
+  const exposure = await store.insertExposure({
+    passport_id: event.passport_id,
+    session_id: event.session_id || null,
+    ts: event.ts || new Date(),
+    channel: event.channel,
+    direction: event.direction,
+    source: event.source || null,
+    content_id: event.content_id || null,
+    content_url: event.content_url || null,
+    text,
+    content_hash,
+    dwell_ms: event.dwell_ms || null,
+    meta: event.meta || null,
+  })
+
+  memory.enqueue(exposure.id).catch(err => {
+    logger.error({ err, exposureId: exposure.id }, 'Failed to enqueue embedding')
+  })
+
+  notify('awareness.recorded', {
+    type: 'awareness.recorded',
+    data: {
+      exposure_id: exposure.id,
+      passport_id: exposure.passport_id,
+      session_id: exposure.session_id,
+      ts: exposure.ts,
+      channel: exposure.channel,
+      direction: exposure.direction,
+      source: exposure.source,
+      content_id: exposure.content_id,
+    },
+  }).catch(err => logger.warn({ err }, 'awareness.recorded notify failed'))
+
+  return exposure
+}
+
+export async function forget({ passport_id }) {
+  if (!enabled) return 0
+  const deleted = await store.deletePassport(passport_id)
+
+  // GC chunks whose content_hash is no longer referenced by any exposure.
+  // Chunks that other passports still reference are preserved (shared content).
+  const orphans = await store.gcOrphanChunks().catch(err => {
+    logger.warn({ err, passport_id }, 'orphan chunk GC failed')
+    return 0
+  })
+
+  notify('awareness.forgotten', {
+    type: 'awareness.forgotten',
+    data: { passport_id, deleted_count: deleted, orphan_chunks_deleted: orphans },
+  }).catch(err => logger.warn({ err }, 'awareness.forgotten notify failed'))
+
+  return deleted
+}
+
+export async function recall(args) {
+  if (!enabled) return []
+  return query.recall(args)
+}
+
+export async function population(args) {
+  if (!enabled) return { count: 0, passports: [] }
+  return query.population(args)
+}
+
+export async function timeline(args) {
+  if (!enabled) return []
+  return store.timeline(args)
+}
