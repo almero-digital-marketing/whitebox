@@ -72,6 +72,8 @@ const wb = whitebox({
       // Reading band widened from the default -20% to -10% (central 80% of the
       // viewport rather than 60%).
       text: {
+        sequential: true,                // read top-to-bottom: only the topmost visible block
+                                         // accumulates; focus advances when it's read (default for text)
         cps: 25,                         // ~chars/sec reading speed; lower = longer dwell to count as read
         minRequiredMs: 1500,             // floor: even a short line needs ~1.5s
         capRequiredMs: 60_000,           // ceiling: length scales dwell up to 60s, then caps

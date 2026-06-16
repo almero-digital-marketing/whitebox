@@ -124,6 +124,30 @@ describe('tracker state machine', () => {
     tracker.stop()
   })
 
+  it('sequential mode: accumulates the topmost element first, then advances', async () => {
+    const onRead = vi.fn()
+    const tracker = makeTracker({
+      requiredMs: () => 60,
+      onRead,
+      options: { tickMs: 20, minPartialRatio: 0.5, sequential: true },
+    })
+    tracker.start()
+    document.body.innerHTML = `<p>first</p><p>second</p>`
+    const [a, b] = document.body.children
+    tracker.observe(a); tracker.observe(b)
+    // Both visible at once — but only the topmost (first observed) should read.
+    FakeIO.last.trigger(a, 1.0)
+    FakeIO.last.trigger(b, 1.0)
+    await new Promise(r => setTimeout(r, 100))
+    expect(onRead).toHaveBeenCalledTimes(1)
+    expect(onRead.mock.calls[0][0].text).toBe('first')
+    // Focus advances to the second element, which then fires on its own.
+    await new Promise(r => setTimeout(r, 100))
+    expect(onRead).toHaveBeenCalledTimes(2)
+    expect(onRead.mock.calls[1][0].text).toBe('second')
+    tracker.stop()
+  })
+
   it('fires at most once per element', async () => {
     const onRead = vi.fn()
     const tracker = makeTracker({ onRead })

@@ -21,6 +21,7 @@ const DEFAULTS = {
   minRequiredMs: 1500,
   minPartialRatio: 0.5,
   tickMs: 250,
+  sequential: true,   // read top-to-bottom: only the topmost visible block accumulates
 }
 
 function classify(el) {
