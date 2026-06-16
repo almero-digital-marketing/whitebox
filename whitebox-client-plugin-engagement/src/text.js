@@ -62,19 +62,23 @@ export default function createTextEngagements({ onRead, onProgress, options = {}
     quietMs: options.scrollQuietMs,
   })
 
-  // Per-element scroll-velocity threshold. With scrollVelocityFactor set, the
-  // max velocity scales with the element's font size — big headings tolerate
-  // faster scrolling than body text — so you can scan headings while a paragraph
-  // at the same scroll speed waits for you to settle.
+  // Per-element scroll-velocity threshold, scaled by the element's font size —
+  // big headings tolerate faster scrolling than body text, so you can scan a
+  // heading while a paragraph at the same scroll speed waits for you to settle.
+  //   scrollVelocityForFontSize(px) → max velocity   (arbitrary curve)
+  //   scrollVelocityFactor          → linear: factor × px
+  //   else scrollVelocityMax / default (fixed)
   const fontSizeCache = new WeakMap()
   function maxVelocityFor(el) {
-    if (options.scrollVelocityFactor == null) return options.scrollVelocityMax
+    const curve = options.scrollVelocityForFontSize
+    const factor = options.scrollVelocityFactor
+    if (typeof curve !== 'function' && factor == null) return options.scrollVelocityMax
     let fs = fontSizeCache.get(el)
     if (fs === undefined) {
       fs = (typeof getComputedStyle === 'function' ? parseFloat(getComputedStyle(el).fontSize) : NaN) || 16
       fontSizeCache.set(el, fs)
     }
-    return options.scrollVelocityFactor * fs
+    return typeof curve === 'function' ? curve(fs) : factor * fs
   }
 
   const inner = createTracker({
