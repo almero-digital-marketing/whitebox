@@ -66,11 +66,14 @@ const wb = whitebox({
       // proportional to its length. So nothing fires just because it loaded
       // on-screen — you have to scroll to it and pause.
       //
-      // These are essentially the SDK defaults; the only nudge is cps (reading
-      // speed), raised a bit so demo paragraphs need a few seconds, not ten.
+      // Close to the SDK defaults, with two nudges: cps (reading speed) raised
+      // so demo paragraphs need a few seconds not ten, and the reading band
+      // widened from the default -20% to -10% (counts in the central 80% of the
+      // viewport rather than the central 60%).
       text: {
-        cps: 45,             // ~chars/sec; higher = shorter dwell to count as read
-        minRequiredMs: 1500, // floor: even a short line needs ~1.5s
+        cps: 45,                         // ~chars/sec; higher = shorter dwell to count as read
+        minRequiredMs: 1500,             // floor: even a short line needs ~1.5s
+        rootMargin: '-10% 0% -10% 0%',   // reading band = central 80% of viewport
       },
       // images: ~3s of viewport dwell (SDK default)
     }),
