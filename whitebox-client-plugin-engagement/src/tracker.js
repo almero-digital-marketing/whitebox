@@ -15,9 +15,9 @@
 //     out of view), focus advances to the next element down. Used for text.
 //     With a sequentialGroup(el) key, each group gets its own independent focus
 //     (e.g. headings and paragraphs read as separate top-to-bottom queues).
-//     A block that scrolls off the top releases focus once its bottom edge
-//     rises above readingLineRatio of the viewport — so a block you've scrolled
-//     past doesn't keep blocking blocks still on screen below it.
+//     A block that arrived from below and has scrolled up so its middle rises
+//     above readingLineRatio of the viewport releases focus — so a block at the
+//     very top doesn't keep blocking blocks still on screen below it.
 //
 // Domain specifics (text vs image vs …) come from injected hooks:
 //   - requiredMs(el)            — how much time defines "read"
@@ -71,6 +71,7 @@ export default function createTracker({
       accumulated_ms: 0,
       reading: false,
       visible: false,
+      enteredFromBelow: false,   // has appeared below the reading line at least once
       last_tick_at: 0,
       fired: false,
     }
@@ -129,10 +130,15 @@ export default function createTracker({
       const s = states.get(el)
       if (!s || s.fired || !s.visible) continue
       const rect = el.getBoundingClientRect()
-      // Release a block that has scrolled off the top: once its top edge is
-      // above the viewport and its bottom has risen above the reading line,
-      // you've read past it — don't let it block blocks still on screen below.
-      if (lineY > 0 && rect.top < 0 && rect.bottom <= lineY) continue
+      if (lineY > 0 && rect.height > 0) {
+        // A block that appears below the reading line is "arriving from below".
+        if (rect.top >= lineY) s.enteredFromBelow = true
+        // Once it has scrolled up so its middle is above the line, you've read
+        // past it — release focus so a block at the very top doesn't keep
+        // blocking blocks still on screen below it. (Above-the-fold blocks never
+        // arrived from below, so they're never released early this way.)
+        if (s.enteredFromBelow && (rect.top + rect.bottom) / 2 <= lineY) continue
+      }
       const key = sequentialGroup ? sequentialGroup(el) : ''
       const cur = best.get(key)
       if (!cur || rect.top < cur.top) best.set(key, { s, top: rect.top })

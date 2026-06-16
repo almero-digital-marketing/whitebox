@@ -22,7 +22,7 @@ const DEFAULTS = {
   minPartialRatio: 0.5,
   tickMs: 250,
   sequential: true,        // read top-to-bottom: only the topmost visible block accumulates
-  readingLineRatio: 0.25,  // a block scrolled off the top releases focus when its bottom passes above the top 25%
+  readingLineRatio: 0.25,  // a block read & scrolled up releases focus once its middle passes above the top 25%
 }
 
 function classify(el) {

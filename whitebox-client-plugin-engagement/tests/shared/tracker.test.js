@@ -173,29 +173,32 @@ describe('tracker state machine', () => {
     tracker.stop()
   })
 
-  it('sequential mode: a block scrolled off the top releases focus to one on screen', async () => {
+  it('sequential mode: a block read and scrolled to the top releases focus', async () => {
     const onRead = vi.fn()
-    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true })
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true })   // lineY = 200
     const tracker = createTracker({
       gates: [{ isOpen: () => true }],
       requiredMs: () => 10_000,   // long, so nothing fires — we inspect which block accumulates
-      buildPayload: (el, s) => ({ text: el.textContent, partial: s.partial }),
+      buildPayload: (el) => ({ text: el.textContent }),
       onRead,
-      options: { tickMs: 20, sequential: true, readingLineRatio: 0.25 },   // lineY = 200
+      options: { tickMs: 20, sequential: true, readingLineRatio: 0.25 },
     })
     tracker.start()
     document.body.innerHTML = `<p>A</p><p>B</p>`
     const [a, b] = document.body.children
-    // A is scrolled off the top (top<0) with its bottom above the reading line → released.
-    a.getBoundingClientRect = () => ({ top: -250, bottom: 120, height: 370 })
-    // B is on screen below.
-    b.getBoundingClientRect = () => ({ top: 260, bottom: 560, height: 300 })
+    // Both arrive from below the reading line; A is topmost → focus.
+    a.getBoundingClientRect = () => ({ top: 300, bottom: 600, height: 300 })
+    b.getBoundingClientRect = () => ({ top: 650, bottom: 950, height: 300 })
     tracker.observe(a); tracker.observe(b)
-    FakeIO.last.trigger(a, 1.0)
-    FakeIO.last.trigger(b, 1.0)
-    await new Promise(r => setTimeout(r, 60))
-    expect([...tracker._active]).toContain(b)      // B accumulates
-    expect([...tracker._active]).not.toContain(a)  // A released, not blocking
+    FakeIO.last.trigger(a, 1.0); FakeIO.last.trigger(b, 1.0)
+    await new Promise(r => setTimeout(r, 40))
+    expect([...tracker._active]).toContain(a)
+    // A is read and scrolled to the very top (middle above the line); B is now in view.
+    a.getBoundingClientRect = () => ({ top: -250, bottom: 50, height: 300 })
+    b.getBoundingClientRect = () => ({ top: 150, bottom: 450, height: 300 })
+    await new Promise(r => setTimeout(r, 40))
+    expect([...tracker._active]).toContain(b)       // focus moved to B
+    expect([...tracker._active]).not.toContain(a)   // A released, not blocking
     tracker.stop()
   })
 
