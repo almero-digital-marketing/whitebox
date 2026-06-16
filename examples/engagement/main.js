@@ -1,5 +1,7 @@
 // WhiteBox engagement demo — wires the real client SDK to the page.
-// Bundled by serve.mjs (esbuild) from the workspace packages.
+// Bundled by serve.mjs (esbuild) from the workspace packages. If you see a
+// "Failed to resolve module specifier" error, you're not serving via
+// `node serve.mjs` — open http://localhost:5173 from that server instead.
 
 import whitebox from 'whitebox-client'
 import engagementPlugin from 'whitebox-client-plugin-engagement'
@@ -11,15 +13,12 @@ const passportEl = document.querySelector('#passport')
 function log(kind, data) {
   const row = document.createElement('div')
   row.className = `row ${kind}`
-  const time = new Date().toLocaleTimeString()
-  row.innerHTML = `<span class="t">${time}</span> <span class="k">${kind}</span> ` +
-    `<span class="d">${escapeHtml(typeof data === 'string' ? data : JSON.stringify(data))}</span>`
+  row.innerHTML = `<span class="t">${new Date().toLocaleTimeString()}</span> ` +
+    `<span class="k">${kind}</span> <span class="d"></span>`
+  row.querySelector('.d').textContent = typeof data === 'string' ? data : JSON.stringify(data)
   logEl.prepend(row)
 }
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
-}
+function setStatus(text, ok) { statusEl.textContent = text; statusEl.className = ok ? 'ok' : '' }
 
 // Served same-origin via serve.mjs, which proxies /sessions, /socket.io,
 // /engagement, … to the real whitebox-server. So the SDK url is just us.
@@ -35,27 +34,31 @@ const wb = whitebox({
     engagementPlugin({ flushIntervalMs: 2000, batchSize: 5 }),
   ],
 })
+window.wb = wb
 
-// The plugin emits a local event for every tracked read — mirror them to the log.
+// Register listeners BEFORE awaiting ready — the socket connects during init.
+wb.on('transport:connected',    () => { setStatus('live · socket connected', true); log('socket', 'connected') })
+wb.on('transport:disconnected', d  => { setStatus('session ready · socket down'); log('socket', `disconnected: ${d?.reason || ''}`) })
 wb.on('engagement.text',  e => log('text',  `“${e.id}” ${e.length_chars}c · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`))
 wb.on('engagement.image', e => log('image', `${e.id} · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`))
-wb.on('engagement.video', e => log('video', `${e.id} · ${e.total_watched_s}s watched · ${e.completion_pct}%${e.partial ? ' · partial' : ''}`))
+wb.on('engagement.video', e => log('video', `${e.id} · ${e.total_watched_s}s · ${e.completion_pct}%${e.partial ? ' · partial' : ''}`))
 
-await wb.ready
-statusEl.textContent = 'connected'
-statusEl.className = 'ok'
-passportEl.textContent = wb.passportId || '(none — is the server up?)'
-log('ready', `passport ${wb.passportId}`)
+try {
+  await wb.ready
+  window.__wbReady = true
+  setStatus('session ready', true)
+  passportEl.textContent = wb.passportId || '(none — is the server up?)'
+  log('ready', `passport ${wb.passportId}`)
+  if (!wb.passportId) {
+    log('warn', 'No passport — /sessions/resolve did not return one. Is whitebox-server running at WB_SERVER and reachable through the proxy?')
+  }
+} catch (err) {
+  setStatus('error')
+  log('error', `init failed: ${err?.message || err}`)
+  throw err
+}
 
-// Wire the toolbar buttons.
-document.querySelector('#flush').addEventListener('click', () => {
-  wb.engagement.flush()
-  log('flush', 'forced flush')
-})
+document.querySelector('#flush').addEventListener('click', () => { wb.engagement.flush(); log('flush', 'forced flush') })
 document.querySelector('#copy').addEventListener('click', async () => {
-  await navigator.clipboard.writeText(wb.passportId || '')
-  log('copy', 'passport id copied')
+  await navigator.clipboard.writeText(wb.passportId || ''); log('copy', 'passport id copied')
 })
-
-// Expose for the console — poke at it manually if you like.
-window.wb = wb

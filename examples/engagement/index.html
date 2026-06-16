@@ -106,6 +106,37 @@
   </aside>
 </div>
 
+<!-- Diagnostics: a classic script catches failures the module can't surface,
+     e.g. a bare-specifier module-resolution error when the page is NOT served
+     via `node serve.mjs`. -->
+<script>
+(function () {
+  function row(kind, msg) {
+    var el = document.getElementById('log'); if (!el) return
+    var r = document.createElement('div'); r.className = 'row ' + kind
+    r.innerHTML = '<span class="t">' + new Date().toLocaleTimeString() + '</span> ' +
+      '<span class="k">' + kind + '</span> <span class="d"></span>'
+    r.querySelector('.d').textContent = msg; el.prepend(r)
+  }
+  function fail(msg) {
+    var s = document.getElementById('status'); if (s) { s.textContent = 'error'; s.className = '' }
+    row('error', msg)
+  }
+  addEventListener('error', function (e) {
+    var m = e.message || (e.error && e.error.message) || String(e)
+    fail(m)
+    if (/resolve module specifier|Failed to fetch dynamically/i.test(m)) {
+      row('warn', 'The SDK bundle did not load. Serve the page with `node serve.mjs` (it bundles main.js) and open http://localhost:5173 — do not open index.html directly.')
+    }
+  })
+  addEventListener('unhandledrejection', function (e) {
+    fail((e.reason && e.reason.message) || String(e.reason))
+  })
+  setTimeout(function () {
+    if (!window.__wbReady) row('warn', 'Still not ready after 6s. Check: (1) running via `node serve.mjs`? (2) whitebox-server up at WB_SERVER? Open the browser console for details.')
+  }, 6000)
+})()
+</script>
 <script type="module" src="/main.js"></script>
 </body>
 </html>
