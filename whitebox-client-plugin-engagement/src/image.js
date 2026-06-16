@@ -55,7 +55,7 @@ function buildPayload(el, state) {
   }
 }
 
-export default function createImageEngagements({ onRead, options = {} } = {}) {
+export default function createImageEngagements({ onRead, onProgress, options = {} } = {}) {
   const cfg = { ...DEFAULTS, ...options }
   const fixedRequiredMs = cfg.requiredMs
   const idAttribute = options.idAttribute ?? DEFAULT_IMAGE_ID_ATTR
@@ -67,6 +67,7 @@ export default function createImageEngagements({ onRead, options = {} } = {}) {
     requiredMs: () => fixedRequiredMs,
     buildPayload,
     onRead,
+    onProgress,
     options: { ...cfg, idAttribute },
   })
 

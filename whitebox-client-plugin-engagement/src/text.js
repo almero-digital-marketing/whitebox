@@ -30,7 +30,7 @@ function classify(el) {
   return { kind: 'paragraph', level: null }
 }
 
-export default function createTextEngagements({ onRead, options = {} } = {}) {
+export default function createTextEngagements({ onRead, onProgress, options = {} } = {}) {
   const cfg = { ...DEFAULTS, ...options }
   const idAttribute = options.idAttribute ?? DEFAULT_TEXT_ID_ATTR
 
@@ -66,6 +66,7 @@ export default function createTextEngagements({ onRead, options = {} } = {}) {
     requiredMs,
     buildPayload,
     onRead,
+    onProgress,
     options: { ...cfg, idAttribute },
   })
 

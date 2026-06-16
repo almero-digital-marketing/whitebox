@@ -39,6 +39,63 @@ function setStatus(text, ok) { statusEl.textContent = text; statusEl.className =
 const sel = (v) => (window.CSS && CSS.escape) ? CSS.escape(v) : String(v).replace(/"/g, '\\"')
 function markRead(attr, id) { document.querySelector(`[${attr}="${sel(id)}"]`)?.setAttribute('data-wb-read', '1') }
 
+// --- Per-element timer badges ---------------------------------------------
+// Live dwell visualised next to each tracked element. Rendered as absolutely
+// positioned overlays on <body> (NOT children of the tracked element — that
+// would pollute its textContent, which the tracker reads as the captured text).
+const BADGE_W = 124
+const badges = new Map()   // `${kind}:${id}` -> { el, target }
+function targetEl(kind, id) {
+  const attr = kind === 'image' ? 'data-wb-image' : 'data-wb-text'
+  return document.querySelector(`[${attr}="${sel(id)}"]`)
+}
+function ensureBadge(kind, id) {
+  const key = `${kind}:${id}`
+  let entry = badges.get(key)
+  if (entry) return entry
+  const target = targetEl(kind, id)
+  if (!target) return null
+  const el = document.createElement('div')
+  el.className = 'wb-timer'
+  el.innerHTML = '<span class="wb-timer-txt"></span><span class="wb-timer-bar"><i></i></span>'
+  document.body.appendChild(el)
+  entry = { el, target }
+  badges.set(key, entry)
+  return entry
+}
+function placeBadge(entry) {
+  const r = entry.target.getBoundingClientRect()
+  // Document coords → the absolutely-positioned badge scrolls with the page.
+  entry.el.style.top = `${window.scrollY + r.top + 2}px`
+  entry.el.style.left = (r.left >= BADGE_W + 16)
+    ? `${window.scrollX + r.left - BADGE_W - 12}px`   // margin note in the left gutter
+    : `${window.scrollX + r.left + 6}px`              // no gutter → tuck inside top-left
+}
+function showProgress(p) {
+  const entry = ensureBadge(p.kind, p.id)
+  if (!entry || entry.el.classList.contains('done')) return
+  entry.el.querySelector('.wb-timer-txt').textContent =
+    `${(p.ms_spent / 1000).toFixed(1)} / ${(p.required_ms / 1000).toFixed(1)}s`
+  entry.el.querySelector('.wb-timer-bar > i').style.width = `${Math.round(p.ratio * 100)}%`
+  entry.el.classList.toggle('reading', !!p.reading)
+  placeBadge(entry)
+}
+function finishBadge(kind, id, partial) {
+  const entry = ensureBadge(kind, id)
+  if (!entry) return
+  entry.el.classList.remove('reading')
+  entry.el.classList.add(partial ? 'partial' : 'done')
+  entry.el.querySelector('.wb-timer-bar > i').style.width = '100%'
+  entry.el.querySelector('.wb-timer-txt').textContent = partial ? 'partial ✓' : 'read ✓'
+  placeBadge(entry)
+}
+let placeScheduled = false
+addEventListener('resize', () => {
+  if (placeScheduled) return
+  placeScheduled = true
+  requestAnimationFrame(() => { placeScheduled = false; for (const e of badges.values()) placeBadge(e) })
+})
+
 // Reachability probe — independent of the SDK, time-bounded.
 ;(async () => {
   const ctrl = new AbortController()
@@ -87,8 +144,9 @@ window.wb = wb
 
 wb.on('transport:connected',    () => { setStatus('live · socket connected', true); log('socket', 'connected') })
 wb.on('transport:disconnected', d  => { setStatus('session ready · socket down'); log('socket', `disconnected: ${d?.reason || ''}`) })
-wb.on('engagement.text',  e => { log('text',  `“${e.id}” ${e.length_chars}c · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`, e); markRead('data-wb-text', e.id) })
-wb.on('engagement.image', e => { log('image', `${e.id} · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`, e); markRead('data-wb-image', e.id) })
+wb.on('engagement.progress', showProgress)
+wb.on('engagement.text',  e => { log('text',  `“${e.id}” ${e.length_chars}c · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`, e); markRead('data-wb-text', e.id); finishBadge('text', e.id, e.partial) })
+wb.on('engagement.image', e => { log('image', `${e.id} · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`, e); markRead('data-wb-image', e.id); finishBadge('image', e.id, e.partial) })
 wb.on('engagement.video', e => log('video', `${e.id} · ${e.total_watched_s}s · ${e.completion_pct}%${e.partial ? ' · partial' : ''}`, e))
 
 try {

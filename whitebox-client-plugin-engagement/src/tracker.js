@@ -34,6 +34,7 @@ export default function createTracker({
   requiredMs,
   buildPayload,
   onRead,
+  onProgress,
   options = {},
 } = {}) {
   if (typeof requiredMs !== 'function') throw new Error('tracker: requiredMs(el) is required')
@@ -89,7 +90,23 @@ export default function createTracker({
       accumulate(s)
       s.reading = false
       active.delete(s.el)
+      reportProgress(s, false)   // freeze the timer where it paused
     }
+  }
+
+  // Live dwell snapshot for an element — drives the demo's per-element timer.
+  function reportProgress(s, reading) {
+    if (!onProgress || s.fired) return
+    const live = reading ? performance.now() - s.last_tick_at : 0
+    const ms = Math.round(s.accumulated_ms + live)
+    onProgress({
+      id: s.id,
+      url: s.url,
+      ms_spent: ms,
+      required_ms: s.required_ms,
+      ratio: Math.max(0, Math.min(1, ms / s.required_ms)),
+      reading,
+    })
   }
 
   // The topmost (highest on screen) visible, not-yet-fired element. Ties — and
@@ -145,6 +162,8 @@ export default function createTracker({
         accumulate(s)
         fireRead(s, false)
         fired = true
+      } else {
+        reportProgress(s, true)   // tick the live timer
       }
     }
     // In sequential mode, advance focus to the next element immediately rather

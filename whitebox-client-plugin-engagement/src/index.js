@@ -73,6 +73,7 @@ export default function engagementPlugin(localOptions = {}) {
             })
             emitter.emit('engagement.text', { id, kind, level, text: chunk, length_chars, ms_spent, url, partial })
           },
+          onProgress: (p) => emitter.emit('engagement.progress', { kind: 'text', ...p }),
         })
         if (typeof window !== 'undefined') queue(async () => textTracker.start())
       }
@@ -90,6 +91,7 @@ export default function engagementPlugin(localOptions = {}) {
             })
             emitter.emit('engagement.image', { id, kind, src, alt, width, height, ms_spent, url, partial })
           },
+          onProgress: (p) => emitter.emit('engagement.progress', { kind: 'image', ...p }),
         })
         if (typeof window !== 'undefined') queue(async () => imageTracker.start())
       }
