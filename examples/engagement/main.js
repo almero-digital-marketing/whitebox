@@ -134,6 +134,7 @@ const wb = whitebox({
         cps: 30,                         // ~chars/sec reading speed; lower = longer dwell to count as read
         minRequiredMs: 1500,             // floor: even a short line needs ~1.5s
         capRequiredMs: 60_000,           // ceiling: length scales dwell up to 60s, then caps
+        scrollVelocityMax: 0.4,          // px/ms (~400px/s) — scrolling faster than this pauses the timer
         // Reading band: top 0%, bottom 30%. Top 0% means a block counts from the
         // very top of the viewport (above-the-fold content included) and stays
         // counted until it scrolls off the top. The 30% bottom margin keeps an
