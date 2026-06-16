@@ -15,26 +15,27 @@
   .pill { font:12px/1 ui-monospace,monospace; padding:.35rem .55rem; border-radius:999px; background:#eef2f5; color:var(--mut); }
   #status.ok { color:#0a7d52; background:#e3f6ec; }
   .layout { display:grid; grid-template-columns: 1fr 360px; gap:0; }
-  main { max-width:680px; margin:0 auto; padding:2rem 1.5rem 60vh; }
-  main h1 { font-size:2rem; margin:.5rem 0 1.5rem; }
-  main h2 { font-size:1.35rem; margin:2.5rem 0 .5rem; }
-  main img { width:100%; border-radius:10px; border:1px solid var(--line); display:block; margin:1rem 0; }
-  main video { width:100%; border-radius:10px; border:1px solid var(--line); margin:1rem 0; }
-  .hint { color:var(--mut); font-size:.85rem; }
-  /* log sidebar */
+  main { max-width:640px; margin:0 auto; padding:2rem 1.5rem 70vh; }
+  main h1 { font-size:1.9rem; margin:.5rem 0 1.2rem; }
+  main h2 { font-size:1.3rem; margin:2.2rem 0 .4rem; }
+  main p { margin:0 0 1rem; }
+  main img { width:100%; border-radius:10px; border:1px solid var(--line); display:block; margin:1.2rem 0; }
+  main video { width:100%; border-radius:10px; border:1px solid var(--line); margin:1.2rem 0; }
+  .hint { color:var(--mut); font-size:.9rem; }
+  /* highlight tracked elements as they fire, via the data attr the SDK sets */
+  [data-wb-read="1"] { box-shadow:-3px 0 0 0 var(--accent); padding-left:.6rem; margin-left:-.6rem; transition:box-shadow .2s; }
   aside { position:sticky; top:49px; height:calc(100vh - 49px); border-left:1px solid var(--line);
           background:#fff; display:flex; flex-direction:column; }
   .bar { display:flex; gap:.5rem; padding:.6rem .8rem; border-bottom:1px solid var(--line); align-items:center; }
   .bar h3 { margin:0; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--mut); flex:1; }
-  .bar button { font:12px sans-serif; padding:.3rem .6rem; border:1px solid var(--line); background:#f6f8fa;
-                border-radius:6px; cursor:pointer; }
+  .bar button { font:12px sans-serif; padding:.3rem .6rem; border:1px solid var(--line); background:#f6f8fa; border-radius:6px; cursor:pointer; }
   .bar button:hover { background:#eef2f5; }
   #log { overflow:auto; padding:.4rem .6rem; font:12px/1.5 ui-monospace,monospace; }
   #log .row { padding:.25rem 0; border-bottom:1px dashed #eef1f4; word-break:break-word; }
   #log .t { color:#9aa6b2; }
   #log .k { display:inline-block; min-width:46px; font-weight:700; }
   #log .text .k { color:#2f6fed; } #log .image .k { color:#a855f7; } #log .video .k { color:#e0780b; }
-  #log .ready .k, #log .flush .k, #log .copy .k { color:#0a7d52; }
+  #log .ready .k, #log .flush .k, #log .copy .k, #log .probe .k { color:#0a7d52; }
   #log .warn .k, #log .error .k { color:#c0392b; }
 </style>
 </head>
@@ -50,50 +51,54 @@
   <main>
     <h1 data-wb-text="title">Reading, watching, listening — recorded as memory</h1>
 
-    <p class="hint">Scroll, dwell on the images, and play the video. Every tracked element below
-    streams an engagement event to the server (watch the live log on the right). Each becomes a
-    <code>channel:web · direction:exposure</code> entry in the customer's awareness store.</p>
+    <p class="hint" data-wb-text="intro">Scroll down at a normal pace and pause briefly on each block. Every paragraph below is individually tracked — when you've dwelled on one long enough to count as a read, it gets a green marker and a <b>text</b> row appears in the live log on the right.</p>
 
-    <h2 data-wb-text="what-h">What gets tracked</h2>
-    <p data-wb-text="what-1">Text blocks marked with <code>data-wb-text</code> are tracked for genuine
-    reading — the tracker gates on viewport visibility, scroll velocity and active engagement, so a
-    block that merely flashes past while you scroll does not count. Spend a few seconds on this
-    paragraph and you'll see a <b>text</b> event appear once the dwell threshold is crossed.</p>
+    <h2 data-wb-text="h-what">What gets tracked</h2>
 
-    <p data-wb-text="what-2">Reads are reported with the time spent and whether they were partial.
-    The same content embeds once on the server (keyed by a content hash) and is shared across every
-    customer who saw it — so identical copy on ten landing pages is one embedding, attributed to ten
-    passports at query time.</p>
+    <p data-wb-text="what-1">Each text block carries a <code>data-wb-text</code> attribute with a stable id. The tracker watches every one of them independently: it gates on viewport visibility, scroll velocity, and active engagement, then accumulates dwell time per element. There is no "first paragraph only" — every block competes for your attention on its own.</p>
 
-    <h2 data-wb-text="images-h">Images</h2>
-    <p data-wb-text="images-1">Images marked with <code>data-wb-image</code> are tracked for viewport
-    dwell. These ship with <code>alt</code> text, so the server uses that as the description instead
-    of calling a vision model.</p>
+    <p data-wb-text="what-2">A block counts as read once you've spent enough time with it actually in view. Blink past it while scrolling and it won't count; rest on it and it will. Reads are reported with the time spent and whether they were partial, so the server can tell a skim from a careful read.</p>
+
+    <p data-wb-text="what-3">Identical content embeds once on the server, keyed by a content hash, and is shared across every customer who saw it. The same paragraph on ten landing pages is one embedding, attributed to ten passports at query time — cheap to store, exact to recall.</p>
+
+    <h2 data-wb-text="h-why">Why it matters</h2>
+
+    <p data-wb-text="why-1">Most analytics tell you a page was viewed. WhiteBox tells you which paragraphs a specific person actually read, in what order, and for how long — the difference between "visited pricing" and "read the refund clause twice."</p>
+
+    <p data-wb-text="why-2">Because reads flow into the same awareness store as emails, calls, and CRM records, one question to <code>/analytics/ask</code> can weave them together: what a customer read, what they were told, and what they said back.</p>
+
+    <p data-wb-text="why-3">And it degrades gracefully. A read still in progress when you leave the page is flushed on unload via <code>sendBeacon</code>, so even a ten-second visit is captured rather than lost.</p>
+
+    <h2 data-wb-text="h-images">Images</h2>
+
+    <p data-wb-text="img-1">Images marked with <code>data-wb-image</code> are tracked for viewport dwell, just like text. These ship with <code>alt</code> text, so the server uses that as the description instead of calling a vision model.</p>
 
     <img data-wb-image="diagram-pipeline" alt="Diagram: browser trackers feed engagement events into the awareness store"
-         src="data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='680' height='300'&gt;&lt;rect width='100%25' height='100%25' fill='%23eef6f5'/&gt;&lt;text x='50%25' y='50%25' font-family='sans-serif' font-size='22' fill='%232f9e95' text-anchor='middle'&gt;engagement pipeline&lt;/text&gt;&lt;/svg&gt;">
+         src="data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='280'&gt;&lt;rect width='100%25' height='100%25' fill='%23eef6f5'/&gt;&lt;text x='50%25' y='50%25' font-family='sans-serif' font-size='22' fill='%232f9e95' text-anchor='middle'&gt;engagement pipeline&lt;/text&gt;&lt;/svg&gt;">
 
-    <img data-wb-image="screenshot-timeline" alt="Screenshot: a customer timeline showing interleaved mail, voip and web exposures"
-         src="data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='680' height='300'&gt;&lt;rect width='100%25' height='100%25' fill='%23f2eefb'/&gt;&lt;text x='50%25' y='50%25' font-family='sans-serif' font-size='22' fill='%23a855f7' text-anchor='middle'&gt;customer timeline&lt;/text&gt;&lt;/svg&gt;">
+    <p data-wb-text="img-2">Dwell on the image above for a moment and an <b>image</b> row appears in the log. The second image below is tracked separately with its own id.</p>
 
-    <h2 data-wb-text="video-h">Video</h2>
-    <p data-wb-text="video-1">The video below is marked with <code>data-wb-video</code>. The tracker
-    records the disjoint intervals you actually watch and the completion percentage — not just
-    "played". Note: on the server, a video the first viewer watches triggers transcription
-    (Whisper + frame vision) of the watched portion, which calls OpenAI. Disable it by passing
-    <code>video:false</code> in <code>main.js</code> if you'd rather not.</p>
+    <img data-wb-image="screenshot-timeline" alt="Screenshot: a customer timeline interleaving mail, voip and web exposures"
+         src="data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='280'&gt;&lt;rect width='100%25' height='100%25' fill='%23f2eefb'/&gt;&lt;text x='50%25' y='50%25' font-family='sans-serif' font-size='22' fill='%23a855f7' text-anchor='middle'&gt;customer timeline&lt;/text&gt;&lt;/svg&gt;">
+
+    <h2 data-wb-text="h-video">Video</h2>
+
+    <p data-wb-text="video-1">The video below is marked with <code>data-wb-video</code>. The tracker records the disjoint intervals you actually watch and the completion percentage — not just "played". Note: the first time anyone watches, the server transcribes the watched portion (Whisper + frame vision), which calls OpenAI; set <code>video:false</code> in <code>main.js</code> to skip it.</p>
 
     <video data-wb-video="intro-clip" controls preload="metadata"
            src="https://www.w3schools.com/html/mov_bbb.mp4"></video>
 
-    <h2 data-wb-text="verify-h">Verifying on the server</h2>
-    <p data-wb-text="verify-1">Copy the passport id from the header, then query the customer's
-    timeline (needs the analytics bearer token). The reads you just performed appear as web
-    exposures. See the README for the exact command.</p>
+    <h2 data-wb-text="h-verify">Verifying on the server</h2>
 
-    <p data-wb-text="filler-1">Keep scrolling — the more you dwell, the more events fire. Reads that
-    are still in progress when you leave the page are flushed via <code>sendBeacon</code> on unload,
-    so even a quick visit is captured.</p>
+    <p data-wb-text="verify-1">Copy the passport id from the header, then query the customer's timeline with the analytics bearer token. Every paragraph you read appears as a web exposure. The exact command is in the README.</p>
+
+    <p data-wb-text="verify-2">Keep scrolling — the blocks below are here so you can watch reads fire one after another as each enters the viewport and you settle on it.</p>
+
+    <p data-wb-text="filler-1">This is the kind of long-form passage where reading depth actually matters. A visitor who reaches this paragraph and lingers is materially more engaged than one who bounced at the headline, and the awareness store can tell them apart later.</p>
+
+    <p data-wb-text="filler-2">Each of these paragraphs fires its own read event with its own id and dwell time. There is nothing special about being first or last — the tracker treats every opted-in element the same.</p>
+
+    <p data-wb-text="filler-3">When you've read this far, check the live log: you should see a distinct <b>text</b> row for every block above, in roughly the order you read them. That's the end-to-end path working — browser tracker to server to awareness.</p>
   </main>
 
   <aside>
@@ -126,12 +131,10 @@
     var m = e.message || (e.error && e.error.message) || String(e)
     fail(m)
     if (/resolve module specifier|Failed to fetch dynamically/i.test(m)) {
-      row('warn', 'The SDK bundle did not load. Serve the page with `node serve.mjs` (it bundles main.js) and open http://localhost:5173 — do not open index.html directly.')
+      row('warn', 'The SDK bundle did not load. Serve the page with `node serve.mjs` and open the URL it prints — do not open index.html directly.')
     }
   })
-  addEventListener('unhandledrejection', function (e) {
-    fail((e.reason && e.reason.message) || String(e.reason))
-  })
+  addEventListener('unhandledrejection', function (e) { fail((e.reason && e.reason.message) || String(e.reason)) })
   setTimeout(function () {
     if (!window.__wbReady) row('warn', 'Still not ready after 6s. Check: (1) running via `node serve.mjs`? (2) whitebox-server up at WB_SERVER? Open the browser console for details.')
   }, 6000)

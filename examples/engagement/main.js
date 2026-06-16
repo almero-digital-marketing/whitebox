@@ -1,7 +1,7 @@
 // WhiteBox engagement demo — wires the real client SDK to the page.
 // Bundled by serve.mjs (esbuild) from the workspace packages. If you see a
 // "Failed to resolve module specifier" error, you're not serving via
-// `node serve.mjs` — open http://localhost:5173 from that server instead.
+// `node serve.mjs` — open the URL it prints instead.
 
 import whitebox from 'whitebox-client'
 import engagementPlugin from 'whitebox-client-plugin-engagement'
@@ -19,9 +19,10 @@ function log(kind, data) {
   logEl.prepend(row)
 }
 function setStatus(text, ok) { statusEl.textContent = text; statusEl.className = ok ? 'ok' : '' }
+const sel = (v) => (window.CSS && CSS.escape) ? CSS.escape(v) : String(v).replace(/"/g, '\\"')
+function markRead(attr, id) { document.querySelector(`[${attr}="${sel(id)}"]`)?.setAttribute('data-wb-read', '1') }
 
-// Reachability probe — independent of the SDK, time-bounded. Tells you straight
-// away whether the proxy can reach whitebox-server.
+// Reachability probe — independent of the SDK, time-bounded.
 ;(async () => {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 5000)
@@ -35,27 +36,32 @@ function setStatus(text, ok) { statusEl.textContent = text; statusEl.className =
   } finally { clearTimeout(t) }
 })()
 
-// Served same-origin via serve.mjs, which proxies /sessions, /socket.io,
-// /engagement, … to the real whitebox-server. So the SDK url is just us.
 const wb = whitebox({
   url: location.origin,
-  logger: {
-    debug: () => {},
-    warn:  (...a) => log('warn', a.join(' ')),
-    error: (...a) => log('error', a.join(' ')),
-  },
+  logger: { debug: () => {}, warn: (...a) => log('warn', a.join(' ')), error: (...a) => log('error', a.join(' ')) },
   plugins: [
-    // Short flush interval + small batch so events show up quickly in the demo.
-    engagementPlugin({ flushIntervalMs: 2000, batchSize: 5 }),
+    engagementPlugin({
+      flushIntervalMs: 2000,
+      batchSize: 5,
+      // Demo tuning: every paragraph should register, including tall ones, with
+      // a brief dwell and normal scrolling — not just the first short block.
+      text: {
+        minRatio: 0.2,            // a fifth visible counts (tall blocks never hit 0.5)
+        rootMargin: '0px',        // use the full viewport, not the middle 60%
+        cps: 4000,                // length barely affects the threshold…
+        minRequiredMs: 700,       // …~0.7s of dwell = a read
+        scrollVelocityMax: 1e6,   // don't block on scroll speed
+      },
+      image: { minRatio: 0.2, rootMargin: '0px', requiredMs: 800 },
+    }),
   ],
 })
 window.wb = wb
 
-// Register listeners BEFORE awaiting ready — the socket connects during init.
 wb.on('transport:connected',    () => { setStatus('live · socket connected', true); log('socket', 'connected') })
 wb.on('transport:disconnected', d  => { setStatus('session ready · socket down'); log('socket', `disconnected: ${d?.reason || ''}`) })
-wb.on('engagement.text',  e => log('text',  `“${e.id}” ${e.length_chars}c · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`))
-wb.on('engagement.image', e => log('image', `${e.id} · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`))
+wb.on('engagement.text',  e => { log('text',  `“${e.id}” ${e.length_chars}c · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`); markRead('data-wb-text', e.id) })
+wb.on('engagement.image', e => { log('image', `${e.id} · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`); markRead('data-wb-image', e.id) })
 wb.on('engagement.video', e => log('video', `${e.id} · ${e.total_watched_s}s · ${e.completion_pct}%${e.partial ? ' · partial' : ''}`))
 
 try {
@@ -64,13 +70,9 @@ try {
   setStatus('session ready', true)
   passportEl.textContent = wb.passportId || '(none — is the server up?)'
   log('ready', `passport ${wb.passportId}`)
-  if (!wb.passportId) {
-    log('warn', 'No passport — /sessions/resolve did not return one. Is whitebox-server running at WB_SERVER and reachable through the proxy?')
-  }
+  if (!wb.passportId) log('warn', 'No passport — /sessions/resolve returned none. Is whitebox-server up at WB_SERVER?')
 } catch (err) {
-  setStatus('error')
-  log('error', `init failed: ${err?.message || err}`)
-  throw err
+  setStatus('error'); log('error', `init failed: ${err?.message || err}`); throw err
 }
 
 document.querySelector('#flush').addEventListener('click', () => { wb.engagement.flush(); log('flush', 'forced flush') })
