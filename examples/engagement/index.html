@@ -37,6 +37,11 @@
   #log .text .k { color:#2f6fed; } #log .image .k { color:#a855f7; } #log .video .k { color:#e0780b; }
   #log .ready .k, #log .flush .k, #log .copy .k, #log .probe .k { color:#0a7d52; }
   #log .warn .k, #log .error .k { color:#c0392b; }
+  #log .caret { display:inline-block; width:.8em; color:#b3bcc6; }
+  #log .row:has(.detail) .head { cursor:pointer; }
+  #log .detail { display:none; margin:.3rem 0 .4rem 1.4rem; padding:.5rem .6rem; background:#f6f8fa;
+                 border-radius:6px; white-space:pre-wrap; color:#3a4754; max-height:320px; overflow:auto; }
+  #log .row.open .detail { display:block; }
 </style>
 </head>
 <body>

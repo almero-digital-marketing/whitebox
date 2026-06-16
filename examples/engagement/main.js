@@ -10,12 +10,29 @@ const logEl = document.querySelector('#log')
 const statusEl = document.querySelector('#status')
 const passportEl = document.querySelector('#passport')
 
-function log(kind, data) {
+// log(kind, summary[, detail]) — if `detail` is given, the row is clickable and
+// expands to the full pretty-printed payload so you can inspect every field.
+function log(kind, summary, detail) {
   const row = document.createElement('div')
   row.className = `row ${kind}`
-  row.innerHTML = `<span class="t">${new Date().toLocaleTimeString()}</span> ` +
+  const head = document.createElement('div')
+  head.className = 'head'
+  const hasDetail = detail !== undefined && detail !== null
+  head.innerHTML = `<span class="t">${new Date().toLocaleTimeString()}</span> ` +
+    `<span class="caret">${hasDetail ? '▸' : ' '}</span> ` +
     `<span class="k">${kind}</span> <span class="d"></span>`
-  row.querySelector('.d').textContent = typeof data === 'string' ? data : JSON.stringify(data)
+  head.querySelector('.d').textContent = typeof summary === 'string' ? summary : JSON.stringify(summary)
+  row.appendChild(head)
+  if (hasDetail) {
+    const pre = document.createElement('pre')
+    pre.className = 'detail'
+    pre.textContent = JSON.stringify(detail, null, 2)
+    row.appendChild(pre)
+    head.addEventListener('click', () => {
+      const open = row.classList.toggle('open')
+      head.querySelector('.caret').textContent = open ? '▾' : '▸'
+    })
+  }
   logEl.prepend(row)
 }
 function setStatus(text, ok) { statusEl.textContent = text; statusEl.className = ok ? 'ok' : '' }
@@ -60,9 +77,9 @@ window.wb = wb
 
 wb.on('transport:connected',    () => { setStatus('live · socket connected', true); log('socket', 'connected') })
 wb.on('transport:disconnected', d  => { setStatus('session ready · socket down'); log('socket', `disconnected: ${d?.reason || ''}`) })
-wb.on('engagement.text',  e => { log('text',  `“${e.id}” ${e.length_chars}c · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`); markRead('data-wb-text', e.id) })
-wb.on('engagement.image', e => { log('image', `${e.id} · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`); markRead('data-wb-image', e.id) })
-wb.on('engagement.video', e => log('video', `${e.id} · ${e.total_watched_s}s · ${e.completion_pct}%${e.partial ? ' · partial' : ''}`))
+wb.on('engagement.text',  e => { log('text',  `“${e.id}” ${e.length_chars}c · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`, e); markRead('data-wb-text', e.id) })
+wb.on('engagement.image', e => { log('image', `${e.id} · ${e.ms_spent}ms${e.partial ? ' · partial' : ''}`, e); markRead('data-wb-image', e.id) })
+wb.on('engagement.video', e => log('video', `${e.id} · ${e.total_watched_s}s · ${e.completion_pct}%${e.partial ? ' · partial' : ''}`, e))
 
 try {
   await wb.ready

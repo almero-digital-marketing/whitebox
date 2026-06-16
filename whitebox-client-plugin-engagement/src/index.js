@@ -71,7 +71,7 @@ export default function engagementPlugin(localOptions = {}) {
               ts: new Date().toISOString(),
               id, kind, level, text: chunk, length_chars, ms_spent, url, partial,
             })
-            emitter.emit('engagement.text', { id, kind, level, length_chars, ms_spent, partial })
+            emitter.emit('engagement.text', { id, kind, level, text: chunk, length_chars, ms_spent, url, partial })
           },
         })
         if (typeof window !== 'undefined') queue(async () => textTracker.start())
@@ -88,7 +88,7 @@ export default function engagementPlugin(localOptions = {}) {
               ts: new Date().toISOString(),
               id, kind, src, alt, width, height, ms_spent, url, partial,
             })
-            emitter.emit('engagement.image', { id, src, alt, ms_spent, partial })
+            emitter.emit('engagement.image', { id, kind, src, alt, width, height, ms_spent, url, partial })
           },
         })
         if (typeof window !== 'undefined') queue(async () => imageTracker.start())
@@ -106,7 +106,7 @@ export default function engagementPlugin(localOptions = {}) {
               id, kind, src, duration_s, intervals,
               total_watched_s, completion_pct, ms_spent, url, muted, partial,
             })
-            emitter.emit('engagement.video', { id, src, duration_s, total_watched_s, completion_pct, partial })
+            emitter.emit('engagement.video', { id, kind, src, duration_s, intervals, total_watched_s, completion_pct, ms_spent, url, muted, partial })
           },
         })
         if (typeof window !== 'undefined') queue(async () => videoTracker.start())
