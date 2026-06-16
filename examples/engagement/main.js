@@ -131,7 +131,7 @@ const wb = whitebox({
       text: {
         sequential: true,                // read top-to-bottom: only the topmost visible block
                                          // accumulates; headings + paragraphs are separate queues
-        cps: 24,                         // ~chars/sec reading speed; lower = longer dwell to count as read
+        cps: 20,                         // ~chars/sec reading speed; lower = longer dwell to count as read
         minRequiredMs: 1500,             // floor: even a short line needs ~1.5s
         capRequiredMs: 60_000,           // ceiling: length scales dwell up to 60s, then caps
         // Max scroll velocity scales (steeply) with font size: a power law fit
