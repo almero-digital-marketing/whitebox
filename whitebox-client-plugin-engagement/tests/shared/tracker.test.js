@@ -223,6 +223,25 @@ describe('tracker state machine', () => {
     tracker.stop()
   })
 
+  it('evaluates gates per element (element-aware gates)', async () => {
+    const onRead = vi.fn()
+    const tracker = makeTracker({
+      gates: [{ isOpen: (el) => !el || el.dataset.ok === '1' }],
+      requiredMs: () => 50,
+      onRead,
+    })
+    tracker.start()
+    document.body.innerHTML = `<p data-ok="1">yes</p><p data-ok="0">no</p>`
+    const [a, b] = document.body.children
+    tracker.observe(a); tracker.observe(b)
+    FakeIO.last.trigger(a, 1.0); FakeIO.last.trigger(b, 1.0)
+    await new Promise(r => setTimeout(r, 120))
+    const texts = onRead.mock.calls.map(c => c[0].text)
+    expect(texts).toContain('yes')        // gate open for this element
+    expect(texts).not.toContain('no')     // gate closed for this element
+    tracker.stop()
+  })
+
   it('fires at most once per element', async () => {
     const onRead = vi.fn()
     const tracker = makeTracker({ onRead })

@@ -56,8 +56,10 @@ export default function createTracker({
   let tickTimer = null
   let started = false
 
-  function allGatesOpen() {
-    for (const g of gates) if (!g.isOpen()) return false
+  // Gates may be element-aware (e.g. a scroll-velocity gate whose threshold
+  // scales with the element's font size). Gates that don't care ignore the arg.
+  function gatesOpen(el) {
+    for (const g of gates) if (!g.isOpen(el)) return false
     return true
   }
 
@@ -150,21 +152,22 @@ export default function createTracker({
     return focus
   }
 
-  // Decide which elements should be accumulating right now.
+  // Decide which elements should be accumulating right now. Gates are evaluated
+  // per element so an element-aware gate (e.g. font-size-scaled scroll velocity)
+  // can open for one block while closed for another at the same scroll speed.
   function reconcile() {
-    const open = allGatesOpen()
     if (cfg.sequential) {
-      const focus = open ? pickFocus() : null
+      const focus = pickFocus()
       for (const el of observed) {
         const s = states.get(el)
         if (!s || s.fired) continue
-        setReading(s, !!focus && focus.has(s))
+        setReading(s, focus.has(s) && gatesOpen(s.el))
       }
     } else {
       for (const el of observed) {
         const s = states.get(el)
         if (!s || s.fired) continue
-        setReading(s, s.visible && open)
+        setReading(s, s.visible && gatesOpen(s.el))
       }
     }
   }
