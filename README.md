@@ -1,21 +1,27 @@
 <p align="center">
-  <img src="whitebox.svg" alt="Whitebox" width="280">
+  <img src="whitebox.svg" alt="whitebox" width="198" />
 </p>
 
-<p align="center">
-  A unified backend for customer-facing communication channels, with a per-passport
-  semantic memory you can query in natural language.
-</p>
+# Whitebox
 
----
+**Whitebox is a channel backend with memory.** Record every customer touch — email, voice call, web engagement, CRM event — against one identity, embed it into a per-customer semantic store, and ask grounded questions about it in natural language.
 
-Whitebox records every customer touch — email, voice call, web engagement, CRM event — against a single **passport** identity, embeds the content into a per-customer **awareness** store, and answers grounded natural-language questions about it (`/analytics/ask`). It's also reachable over **MCP**, so an LLM client can drive it directly.
+## Where it fits
 
-This is a monorepo (npm workspaces). Each package publishes independently; channels are plugins that register against the core via a shared `ctx`.
+Whitebox is a focused component, not your whole backend. It owns customer touchpoints and the memory of them: defined surface, channel-shaped responsibilities. Your app code lives separately and reaches in through HTTP or MCP — it never imports whitebox internals.
 
-## Packages
+## Why whitebox
 
-### Server (Node.js · Express · BullMQ · Postgres + pgvector)
+- **One identity across channels.** Email, phone, fingerprint and login all merge into a single **passport**, so a call, a click and a reply belong to the same person.
+- **Memory you can query.** Every touch is embedded into an **awareness** store. Identical content embeds once (`content_hash`) and is shared across customers at query time — `/analytics/ask` answers in natural language, grounded in what actually happened.
+- **LLM-native.** The same data is reachable over **MCP**, so an agent can read timelines, recall context, and act through whitebox's tools directly.
+- **Channels are plugins.** Each channel is its own npm package that registers against the core `ctx`. Plugins never import each other; adding a channel is a new package, not a core change.
+
+## Channels
+
+This is a monorepo (npm workspaces) — each package publishes independently.
+
+### Server · Node.js · Express · BullMQ · Postgres + pgvector
 
 | package | what it does |
 |---|---|
@@ -26,7 +32,7 @@ This is a monorepo (npm workspaces). Each package publishes independently; chann
 | [`whitebox-server-plugin-engagement`](whitebox-server-plugin-engagement) | Text / image / video engagement fed into awareness |
 | [`whitebox-server-plugin-analytics`](whitebox-server-plugin-analytics) | Recall, population, timeline, grounded `ask`, context inspection |
 
-### Client (browser SDK · tsup · vitest)
+### Client · browser SDK · tsup · vitest
 
 | package | what it does |
 |---|---|
@@ -45,12 +51,6 @@ npm test --workspace=whitebox-server-plugin-mail   # one package
 ```
 
 Tests spin up a throwaway Neon branch per run — copy `.env.test.example` to `.env.test` and fill in your Neon credentials. Server runtime config lives in `whitebox-server/whitebox.config.js` (copy from `whitebox.config.example.js`). Both are gitignored — never commit real secrets.
-
-## Architecture in one breath
-
-- **Passport** = one customer's identity, merged across strong identities (email, phone, fingerprint, user).
-- **Awareness** = content-addressable semantic memory; identical content embeds once (`content_hash`) and is shared across passports at query time.
-- **Plugins** never import each other — they communicate through the core `ctx` (event bus, context registry, MCP registry). Adding a channel is a new package, not a core change.
 
 ## License
 
