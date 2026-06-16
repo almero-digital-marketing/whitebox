@@ -18,6 +18,7 @@ const DEFAULTS = {
   requiredMs: 3000,    // ≥3s in viewport, activity gate open → engaged
   tickMs: 250,
   minPartialRatio: 0.5,
+  sequential: false,   // images are independent of one another (and of text) — track in parallel
 }
 
 function buildPayload(el, state) {
