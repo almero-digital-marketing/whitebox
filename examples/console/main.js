@@ -36,7 +36,7 @@ const POPULATION_QUESTIONS = [
 // One-click example concepts for the raw retrieval tools (prefill + run) —
 // concepts that exist verbatim in the integration demo's content.
 const RECALL_EXAMPLES = ['teeth whitening', 'dental implants', 'Invisalign', 'payment plans', 'emergency appointment', 'insurance']
-const COHORT_EXAMPLES = ['teeth whitening', 'dental implants', 'Invisalign clear aligners', 'root canal', 'payment plans', 'emergency appointment']
+const COHORT_EXAMPLES = ['teeth whitening', 'dental implants', 'Invisalign clear aligners', 'checkup and cleaning', 'payment plans', 'emergency appointment']
 
 // ── persistence ────────────────────────────────────────────────────────────
 passportEl.value = localStorage.getItem('wb.console.passport') || ''
@@ -153,11 +153,16 @@ async function tool(name) {
 
 // Raw cohort size — base-wide, token-only (no passport). "How many customers
 // have content matching this concept?" The counting companion to Ask all.
+// We pass an explicit similarity looser than the API default (0.75) — a short
+// concept query rarely clears 0.75 against full-sentence chunks, so the default
+// would report 0 even when the cohort is plainly there. 0.6 matches the
+// All-customers ask, which grounds its cohort at the same threshold.
+const COHORT_SIMILARITY = 0.6
 async function cohort(concept) {
   const token = needToken(); if (!token) return
-  const query = (concept || $('#cohortq').value.trim() || 'pricing')
+  const query = (concept || $('#cohortq').value.trim() || 'teeth whitening')
   try {
-    const json = await authed('/analytics/population', { method: 'POST', body: { query } }, token)
+    const json = await authed('/analytics/population', { method: 'POST', body: { query, similarity: COHORT_SIMILARITY } }, token)
     const n = json.count ?? 0
     card({ kind: 'cohort', title: `cohort: "${query}"`, stat: `${n} customer${n === 1 ? '' : 's'} match`, json })
   } catch (e) { card({ kind: 'error', title: `cohort — ${e.message}`, error: true }) }
