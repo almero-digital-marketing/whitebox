@@ -10,7 +10,7 @@
 //   • reverse-proxies API + WebSocket traffic to the server so the browser
 //     talks to it SAME-ORIGIN (the server has no HTTP CORS)
 //
-//   Run:  node serve.mjs            # starts everything, opens on :5173
+//   Run:  node serve.mjs            # starts everything, opens on :5273
 //         WB_SERVER=http://host:port node serve.mjs   # proxy to a remote server (no spawn)
 //         WB_START_SERVER=0 node serve.mjs            # don't spawn; use an existing server
 
@@ -23,7 +23,7 @@ import path from 'node:path'
 import { build } from 'esbuild'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PORT = Number(process.env.PORT || 5173)
+const PORT = Number(process.env.PORT || 5273)
 const TARGET = new URL(process.env.WB_SERVER || 'http://localhost:3000')
 const TARGET_PORT = Number(TARGET.port || (TARGET.protocol === 'https:' ? 443 : 80))
 const SERVER_DIR = path.resolve(__dirname, '../../whitebox-server')
