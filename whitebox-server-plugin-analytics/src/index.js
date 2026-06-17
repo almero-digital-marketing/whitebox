@@ -8,7 +8,7 @@ export default {
 
   async register(app, ctx) {
     const { config, awareness, context, passports, logger: rootLogger } = ctx
-    const logger = rootLogger.child({ plugin: 'analytics' })
+    const logger = rootLogger.child({ component: 'analytics' })
     const analyticsConfig = config.analytics || {}
 
     const requireAuth = createAuth({ secret: analyticsConfig.auth?.secret, logger })

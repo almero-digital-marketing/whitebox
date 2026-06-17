@@ -27,7 +27,7 @@ export default {
 
   async register(app, ctx) {
     const { config, db, connect, awareness, ai, logger: rootLogger } = ctx
-    const logger = rootLogger.child({ plugin: 'engagement' })
+    const logger = rootLogger.child({ component: 'engagement' })
     const engagementConfig = config.engagement || {}
 
     // Singleton modules: capture deps once via init(), in dependency order.

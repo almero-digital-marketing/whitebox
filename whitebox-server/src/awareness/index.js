@@ -27,7 +27,7 @@ let notify
 
 export function init(deps) {
   db = deps.db
-  logger = deps.logger.child({ core: 'awareness' })
+  logger = deps.logger.child({ component: 'awareness' })
   const cfg = deps.config.awareness || {}
   enabled = cfg.enabled !== false
   redactPii = cfg.pii?.redact !== false

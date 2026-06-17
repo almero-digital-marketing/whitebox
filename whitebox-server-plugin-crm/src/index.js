@@ -22,7 +22,7 @@ export default {
 
   async register(app, ctx) {
     const { config, db, connect, passports, awareness, context, logger: rootLogger } = ctx
-    const logger = rootLogger.child({ plugin: 'crm' })
+    const logger = rootLogger.child({ component: 'crm' })
     const crmConfig = config.crm || {}
 
     const requireAuth = createAuth({ secret: crmConfig.auth?.secret, logger })

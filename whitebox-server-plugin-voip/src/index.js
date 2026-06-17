@@ -28,7 +28,7 @@ export default {
   async register(app, ctx) {
     const { config, db, webhooks, events, connect, passports, sessions, ai, awareness } = ctx
     const voipConfig = config.voip
-    const logger = ctx.logger.child({ plugin: 'voip' })
+    const logger = ctx.logger.child({ component: 'voip' })
 
     // Resolve relative to the server's working dir (like `context` below), with a
     // local default — so recordings land under the running server, not an absolute
