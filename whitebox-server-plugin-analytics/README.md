@@ -134,16 +134,17 @@ Response:
   "hits": [
     {
       "id": 421,
-      "exposure_id": 88,
-      "chunk_text": "The Enterprise tier includes SSO, audit logs...",
+      "chunk_text": "Professional teeth whitening lifts years of staining...",
       "ts": "2024-11-12T14:23:01Z",
-      "similarity": 0.91
+      "similarity": 0.66,
+      "engagement": 0.75,
+      "depth": "deep"
     }
   ]
 }
 ```
 
-Embeds the query, vector-searches chunks scoped to that passport, returns top matches ordered by cosine similarity.
+Embeds the query, vector-searches chunks scoped to that passport, and returns top matches ranked by relevance **blended with reading depth** — a deeply-read paragraph outranks a skimmed heading of similar relevance (a heading that *is* the query phrase can score the highest raw similarity yet rank below the paragraph the customer actually read). Each hit carries `engagement` (0–1 depth weight) and `depth` (`glance`/`read`/`deep`); non-text exposures (mail/voip/crm) have no depth signal and use `engagement = 1`.
 
 ### `POST /analytics/population` — cohort awareness
 
@@ -176,6 +177,7 @@ Response:
 Parameters:
 - `similarity` — cosine threshold (default 0.75). Raise for strict concept matches, lower for fuzzy theme matches.
 - `limit` — max chunks scanned (not passports). Default 1000.
+- `min_engagement` — optional reading-depth gate (0–1, default 0 = off). A web text read only puts a passport in the cohort if its depth weight clears this — e.g. `0.15` counts genuine reads but excludes skimmed headings (a heading scores ~0.05). Non-text exposures (mail/voip/crm — no depth signal) always qualify, so this never drops a customer who *called* or *was emailed* about the concept. Lets "how many customers are interested in X" mean readers, not glancers.
 
 ### `GET /analytics/timeline/:passport_id` — raw exposure history
 

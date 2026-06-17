@@ -58,11 +58,12 @@ export function registerMcp(ctx, { awareness, context }) {
 
   ctx.mcp.tool({
     name: 'whitebox.population',
-    description: 'Cohort awareness — how many distinct customers have content matching a concept, above a similarity threshold. Useful for "how many people have we told about X?" style questions.',
+    description: 'Cohort awareness — how many distinct customers have content matching a concept, above a similarity threshold. Useful for "how many people have we told about X?" style questions. Pass min_engagement (0–1) to require genuine reading depth on web content (e.g. 0.15 excludes skimmed headings); non-web channels always qualify.',
     inputSchema: {
-      query:      z.string().min(1),
-      similarity: z.number().min(0).max(1).optional(),
-      limit:      z.number().int().positive().max(10000).optional(),
+      query:          z.string().min(1),
+      similarity:     z.number().min(0).max(1).optional(),
+      limit:          z.number().int().positive().max(10000).optional(),
+      min_engagement: z.number().min(0).max(1).optional(),
     },
     handler: async (args) => {
       const result = await awareness.population(args)

@@ -89,22 +89,28 @@ export async function gcOrphanChunks() {
 // vector-distance sort over the (small, per-passport) chunk set.
 export async function recallChunks({ passport_id, embedding, limit = 10 }) {
   const v = toVectorLiteral(embedding)
+  // Rank blends relevance with engagement depth: a deeply-read paragraph outranks
+  // a skimmed heading of similar relevance. engagement is the per-exposure depth
+  // weight (text reads only); non-text exposures coalesce to 1.0 (full). The
+  // multiplier floors at 0.4 so a glance is demoted, not erased.
   const result = await db.raw(
       `SELECT
          c.id, c.content_hash, c.chunk_text,
          e.ts, e.passport_id, e.channel, e.direction, e.source, e.content_id, e.content_url,
          s.utm_source, s.utm_medium, s.utm_campaign, s.utm_term, s.utm_content, s.referrer,
-         1 - (c.embedding <=> ?::vector) AS similarity
+         1 - (c.embedding <=> ?::vector) AS similarity,
+         COALESCE((e.meta->>'engagement')::float, 1) AS engagement,
+         e.meta->>'depth' AS depth
        FROM ${CHUNKS} c
        JOIN (
          SELECT DISTINCT ON (content_hash)
-           content_hash, ts, passport_id, channel, direction, source, content_id, content_url, session_id
+           content_hash, ts, passport_id, channel, direction, source, content_id, content_url, session_id, meta
          FROM ${EXPOSURES}
          WHERE passport_id = ?
          ORDER BY content_hash, ts DESC
        ) e ON e.content_hash = c.content_hash
        LEFT JOIN ${SESSIONS} s ON s.id = e.session_id
-       ORDER BY c.embedding <=> ?::vector
+       ORDER BY (1 - (c.embedding <=> ?::vector)) * (0.4 + 0.6 * COALESCE((e.meta->>'engagement')::float, 1)) DESC
        LIMIT ?`,
     [v, passport_id, v, limit]
   )
@@ -169,7 +175,11 @@ export async function sampleContent({ limit = 40 } = {}) {
 }
 
 // Population: matching chunks first (HNSW-efficient), then resolve to passports.
-export async function populationChunks({ embedding, similarity = 0.75, limit = 1000 }) {
+// minEngagement (0 = off) gates which exposures count: a text read only qualifies
+// if its depth weight clears the threshold, so a heading-glance doesn't put a
+// passport in the cohort. Non-text exposures (mail/voip/crm — no depth signal)
+// always qualify.
+export async function populationChunks({ embedding, similarity = 0.75, limit = 1000, minEngagement = 0 }) {
   const v = toVectorLiteral(embedding)
   const result = await db.raw(
       `WITH matches AS (
@@ -186,9 +196,10 @@ export async function populationChunks({ embedding, similarity = 0.75, limit = 1
          s.utm_term, s.utm_content, s.referrer
        FROM matches m
        JOIN ${EXPOSURES} e ON e.content_hash = m.content_hash
+         AND (?::float <= 0 OR (e.meta->>'engagement') IS NULL OR (e.meta->>'engagement')::float >= ?::float)
        LEFT JOIN ${SESSIONS} s ON s.id = e.session_id
        ORDER BY m.similarity DESC`,
-    [v, v, similarity, v, limit]
+    [v, v, similarity, v, limit, minEngagement, minEngagement]
   )
   return result.rows ?? result
 }

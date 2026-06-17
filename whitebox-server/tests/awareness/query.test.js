@@ -71,7 +71,14 @@ describe('awareness.query', () => {
       embedding: [0.1, 0.2, 0.3],
       similarity: 0.9,
       limit: 50,
+      minEngagement: 0,
     })
+  })
+
+  it('population forwards min_engagement as minEngagement', async () => {
+    const { query, store } = makeQuery({ populationResult: [] })
+    await query.population({ query: 'x', min_engagement: 0.15 })
+    expect(store.populationChunks).toHaveBeenCalledWith(expect.objectContaining({ minEngagement: 0.15 }))
   })
 
   it('populationStats delegates to the store (no embedding)', async () => {

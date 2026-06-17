@@ -15,9 +15,9 @@ export async function recall({ passport_id, query, limit = 10 }) {
   return store.recallChunks({ passport_id, embedding, limit })
 }
 
-export async function population({ query, similarity = 0.75, limit = 1000 }) {
+export async function population({ query, similarity = 0.75, limit = 1000, min_engagement = 0 }) {
   const [embedding] = await ai.embed([query])
-  const matches = await store.populationChunks({ embedding, similarity, limit })
+  const matches = await store.populationChunks({ embedding, similarity, limit, minEngagement: min_engagement })
 
   const byPassport = new Map()
   for (const m of matches) {

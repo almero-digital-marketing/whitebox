@@ -13,9 +13,10 @@ const recallSchema = z.object({
 })
 
 const populationSchema = z.object({
-  query:      z.string().min(1),
-  similarity: z.number().min(0).max(1).optional(),
-  limit:      z.number().int().positive().max(10000).optional(),
+  query:          z.string().min(1),
+  similarity:     z.number().min(0).max(1).optional(),
+  limit:          z.number().int().positive().max(10000).optional(),
+  min_engagement: z.number().min(0).max(1).optional(),
 })
 
 export function mountRoutes(app, { requireAuth, awareness, context, logger }) {

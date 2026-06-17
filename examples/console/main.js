@@ -157,14 +157,18 @@ async function tool(name) {
 // concept query rarely clears 0.75 against full-sentence chunks, so the default
 // would report 0 even when the cohort is plainly there. 0.6 matches the
 // All-customers ask, which grounds its cohort at the same threshold.
+// min_engagement 0.15 requires at least a genuine read on web content (a skimmed
+// heading scores ~0.05), so the cohort counts readers, not glancers; non-web
+// channels (mail/voip/crm) have no depth signal and always qualify.
 const COHORT_SIMILARITY = 0.6
+const COHORT_MIN_ENGAGEMENT = 0.15
 async function cohort(concept) {
   const token = needToken(); if (!token) return
   const query = (concept || $('#cohortq').value.trim() || 'teeth whitening')
   try {
-    const json = await authed('/analytics/population', { method: 'POST', body: { query, similarity: COHORT_SIMILARITY } }, token)
+    const json = await authed('/analytics/population', { method: 'POST', body: { query, similarity: COHORT_SIMILARITY, min_engagement: COHORT_MIN_ENGAGEMENT } }, token)
     const n = json.count ?? 0
-    card({ kind: 'cohort', title: `cohort: "${query}"`, stat: `${n} customer${n === 1 ? '' : 's'} match`, json })
+    card({ kind: 'cohort', title: `cohort: "${query}"`, stat: `${n} customer${n === 1 ? '' : 's'} match (genuine reads)`, json })
   } catch (e) { card({ kind: 'error', title: `cohort — ${e.message}`, error: true }) }
 }
 
