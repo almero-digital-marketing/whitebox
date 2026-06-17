@@ -56,6 +56,17 @@ COUNT=60 node seed.mjs           # more
 
 Give embeddings a few seconds, then open the console's **All customers** tab and ask *"What treatments are patients most interested in?"* or run a cohort on *"teeth whitening"* / *"dental implants"*. The personas read the service copy (whitening, Invisalign, implants, pricing/insurance) and fire matching CRM observations, so cohorts and themes are real.
 
+### Reset (start clean)
+
+To wipe the seeded data and start over — e.g. after changing the theme, or to drop a mixed base:
+
+```bash
+node examples/integration/reset.mjs    # TRUNCATE awareness exposures + chunks
+node examples/integration/seed.mjs     # repopulate
+```
+
+`reset.mjs` reads the DB config straight from `whitebox-server/.env`, so no `--env-file` is needed. It's **destructive** — it clears *all* awareness content (every passport's reads / observations / calls) on that DB, so only point it at a demo/dev database. (The server can keep running; the seed re-embeds through it.)
+
 ## Verify on the server
 
 Copy the passport id (header → *copy id*), then ask a grounded question that spans both channels:
