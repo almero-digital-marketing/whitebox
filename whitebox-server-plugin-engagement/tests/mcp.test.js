@@ -40,7 +40,7 @@ describe('engagement plugin — MCP registration', () => {
       db:        dbStub(),
       connect:   { find: vi.fn(), onConnected: vi.fn(), onDisconnected: vi.fn(), onMessage: vi.fn() },
       awareness: { record: vi.fn() },
-      openai:    {},
+      ai:    {},
       mcp,
       logger,
     }
@@ -65,7 +65,7 @@ describe('engagement plugin — MCP registration', () => {
       db:     dbStub({ rows }),
       connect:{ find: vi.fn(), onConnected: vi.fn(), onDisconnected: vi.fn(), onMessage: vi.fn() },
       awareness: { record: vi.fn() },
-      openai: {}, mcp, logger,
+      ai: {}, mcp, logger,
     }
     await engagementPlugin.register(express(), ctx)
 
@@ -83,7 +83,7 @@ describe('engagement plugin — MCP registration', () => {
       db:     dbStub({ rows: [] }),                  // first() will resolve to null
       connect:{ find: vi.fn(), onConnected: vi.fn(), onDisconnected: vi.fn(), onMessage: vi.fn() },
       awareness: { record: vi.fn() },
-      openai: {}, mcp, logger,
+      ai: {}, mcp, logger,
     }
     await engagementPlugin.register(express(), ctx)
 
@@ -98,7 +98,7 @@ describe('engagement plugin — MCP registration', () => {
       db:     dbStub(),
       connect:{ find: vi.fn(), onConnected: vi.fn(), onDisconnected: vi.fn(), onMessage: vi.fn() },
       awareness: { record: vi.fn() },
-      openai: {}, /* mcp absent */ logger,
+      ai: {}, /* mcp absent */ logger,
     }
     await expect(engagementPlugin.register(express(), ctx)).resolves.not.toThrow()
   })

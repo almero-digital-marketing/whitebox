@@ -12,7 +12,7 @@
 import { z } from 'zod'
 import { runAsk } from './ask.js'
 
-export function registerMcp(ctx, { awareness, openai, context }) {
+export function registerMcp(ctx, { awareness, ai, context }) {
   if (!ctx.mcp) return
 
   ctx.mcp.tool({
@@ -24,7 +24,7 @@ export function registerMcp(ctx, { awareness, openai, context }) {
       limit:       z.number().int().positive().max(50).optional(),
     },
     handler: async (args) => {
-      const result = await runAsk(args, { awareness, openai, context })
+      const result = await runAsk(args, { awareness, ai, context })
       return { content: [{ type: 'text', text: result.answer }] }
     },
   })

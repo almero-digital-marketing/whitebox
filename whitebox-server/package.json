@@ -9,7 +9,7 @@
     "./auth": "./src/auth.js",
     "./notify": "./src/notify.js",
     "./logger": "./src/logger.js",
-    "./openai": "./src/openai.js",
+    "./ai": "./src/ai.js",
     "./test-setup/neon": "./tests/setup/neon.js"
   },
   "scripts": {

@@ -25,7 +25,7 @@ function makeMemory({ exposure, chunkSize, embeddings, alreadyHasChunks = false 
   store.insertChunks.mockReset().mockImplementation(async (contentHash, chunks) => {
     insertedSets.push({ contentHash, chunks })
   })
-  const openai = {
+  const ai = {
     embed: vi.fn(async texts => {
       if (embeddings) return embeddings
       return texts.map(() => [0.1, 0.2, 0.3])
@@ -34,9 +34,9 @@ function makeMemory({ exposure, chunkSize, embeddings, alreadyHasChunks = false 
   const config = { awareness: { chunk: { size: chunkSize ?? 200 } } }
   const logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
-  memory.init({ store, openai, queue, config, logger })
+  memory.init({ store, ai, queue, config, logger })
   return {
-    memory, store, openai, queue, insertedSets, embedQueueAdd,
+    memory, store, ai, queue, insertedSets, embedQueueAdd,
     run: () => workerHandler({ data: { exposureId: exposure?.id ?? 1 } }),
   }
 }
@@ -50,12 +50,12 @@ describe('awareness.memory.embed worker', () => {
       text: 'Hello world.',
       ts: new Date('2024-01-01'),
     }
-    const { run, store, openai, insertedSets } = makeMemory({ exposure, embeddings: [[0.5, 0.6]] })
+    const { run, store, ai, insertedSets } = makeMemory({ exposure, embeddings: [[0.5, 0.6]] })
 
     await run()
 
     expect(store.hasChunks).toHaveBeenCalledWith('abc123')
-    expect(openai.embed).toHaveBeenCalled()
+    expect(ai.embed).toHaveBeenCalled()
     expect(insertedSets).toHaveLength(1)
     expect(insertedSets[0].contentHash).toBe('abc123')
     expect(insertedSets[0].chunks).toEqual([{ text: 'Hello world.', embedding: [0.5, 0.6] }])
@@ -68,45 +68,45 @@ describe('awareness.memory.embed worker', () => {
       text: 'Some content.',
       ts: new Date(),
     }
-    const { run, openai, insertedSets } = makeMemory({ exposure, alreadyHasChunks: true })
+    const { run, ai, insertedSets } = makeMemory({ exposure, alreadyHasChunks: true })
 
     await run()
 
-    expect(openai.embed).not.toHaveBeenCalled()
+    expect(ai.embed).not.toHaveBeenCalled()
     expect(insertedSets).toHaveLength(0)
   })
 
   it('chunks text by approximate word size across sentences', async () => {
     const text = Array.from({ length: 30 }, (_, i) => `Sentence ${i} has five words.`).join(' ')
     const exposure = { id: 1, passport_id: 'p1', content_hash: 'h', text, ts: new Date() }
-    const { run, openai, insertedSets } = makeMemory({ exposure, chunkSize: 50 })
+    const { run, ai, insertedSets } = makeMemory({ exposure, chunkSize: 50 })
 
     await run()
-    expect(openai.embed).toHaveBeenCalledTimes(1)
-    const chunks = openai.embed.mock.calls[0][0]
+    expect(ai.embed).toHaveBeenCalledTimes(1)
+    const chunks = ai.embed.mock.calls[0][0]
     expect(chunks.length).toBeGreaterThanOrEqual(2)
     expect(insertedSets[0].chunks.length).toBe(chunks.length)
   })
 
   it('skips when exposure not found', async () => {
-    const { run, openai } = makeMemory({ exposure: null })
+    const { run, ai } = makeMemory({ exposure: null })
     await run()
-    expect(openai.embed).not.toHaveBeenCalled()
+    expect(ai.embed).not.toHaveBeenCalled()
   })
 
   it('skips when exposure has no content_hash (e.g. disabled)', async () => {
     const exposure = { id: 1, passport_id: 'p1', text: 'x', ts: new Date() }
-    const { run, store, openai } = makeMemory({ exposure })
+    const { run, store, ai } = makeMemory({ exposure })
     await run()
     expect(store.hasChunks).not.toHaveBeenCalled()
-    expect(openai.embed).not.toHaveBeenCalled()
+    expect(ai.embed).not.toHaveBeenCalled()
   })
 
   it('skips when text produces no chunks', async () => {
     const exposure = { id: 1, passport_id: 'p1', content_hash: 'h', text: '', ts: new Date() }
-    const { run, openai } = makeMemory({ exposure })
+    const { run, ai } = makeMemory({ exposure })
     await run()
-    expect(openai.embed).not.toHaveBeenCalled()
+    expect(ai.embed).not.toHaveBeenCalled()
   })
 
   it('enqueue() schedules the embed job with retry + exponential backoff', async () => {
@@ -134,10 +134,10 @@ describe('awareness.memory.embed worker', () => {
     store.findExposure.mockReset()
     store.hasChunks.mockReset()
     store.insertChunks.mockReset()
-    const openai = { embed: vi.fn() }
+    const ai = { embed: vi.fn() }
     const logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
     const config = { awareness: { embedding: { attempts: 2, backoffMs: 1000 } } }
-    memory.init({ store, openai, queue, config, logger })
+    memory.init({ store, ai, queue, config, logger })
 
     await memory.enqueue(7)
     expect(embedQueueAdd).toHaveBeenCalledWith(
@@ -165,20 +165,20 @@ describe('awareness.memory — concurrent dedup', () => {
     store.hasChunks.mockReset().mockImplementation(async () => chunksExist)
     store.insertChunks.mockReset().mockImplementation(async () => { chunksExist = true })
 
-    const openai = {
+    const ai = {
       embed: vi.fn(async () => {
         await new Promise(r => setTimeout(r, 30))
         return [[0.1]]
       }),
     }
     const logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
-    memory.init({ store, openai, queue, config: { awareness: {} }, logger })
+    memory.init({ store, ai, queue, config: { awareness: {} }, logger })
 
     await Promise.all([
       workerHandler({ data: { exposureId: 1 } }),
       new Promise(r => setTimeout(r, 5)).then(() => workerHandler({ data: { exposureId: 2 } })),
     ])
 
-    expect(openai.embed).toHaveBeenCalledTimes(1)
+    expect(ai.embed).toHaveBeenCalledTimes(1)
   })
 })

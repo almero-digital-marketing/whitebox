@@ -48,7 +48,7 @@ export default {
 
     evaluator.init({
       awareness: ctx.awareness,   // recall() + population()
-      openai: ctx.openai,         // prompt() / embed()
+      ai: ctx.ai,         // prompt() / embed()
       context: ctx.context,       // collect() → CRM facts
       db: ctx.db,                 // metric aggregates over exposures
       config: cfg.evaluation || {},

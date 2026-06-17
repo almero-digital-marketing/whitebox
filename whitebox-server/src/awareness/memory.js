@@ -7,7 +7,7 @@ const DEFAULT_BACKOFF_MS = 5000
 
 // Dependencies captured once via init() — module-level singletons, no
 // wrapping factory closure. Matches the core pattern (passports, sessions, …).
-let openai
+let ai
 let queue
 let logger
 
@@ -23,7 +23,7 @@ let embedQueue
 let inFlight  // Map<content_hash, Promise>
 
 export function init(deps) {
-  openai = deps.openai
+  ai = deps.ai
   queue = deps.queue
   logger = deps.logger
 
@@ -77,7 +77,7 @@ async function doEmbed(exposure) {
   const chunks = chunk(exposure.text)
   if (!chunks.length) return
 
-  const embeddings = await openai.embed(chunks, { model })
+  const embeddings = await ai.embed(chunks, { model })
 
   await store.insertChunks(exposure.content_hash, chunks.map((text, i) => ({
     text,

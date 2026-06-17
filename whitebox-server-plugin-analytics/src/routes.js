@@ -17,7 +17,7 @@ const populationSchema = z.object({
   limit:      z.number().int().positive().max(10000).optional(),
 })
 
-export function mountRoutes(app, { requireAuth, awareness, openai, context, logger }) {
+export function mountRoutes(app, { requireAuth, awareness, ai, context, logger }) {
   const router = express.Router()
 
   router.post('/recall', requireAuth, async (req, res) => {
@@ -123,7 +123,7 @@ export function mountRoutes(app, { requireAuth, awareness, openai, context, logg
 
   // /ask lives in ask.js because the system prompt + formatting helpers are
   // a substantial concern on their own.
-  router.post('/ask', requireAuth, createAskHandler({ awareness, openai, context, logger }))
+  router.post('/ask', requireAuth, createAskHandler({ awareness, ai, context, logger }))
 
   app.use('/analytics', router)
 }

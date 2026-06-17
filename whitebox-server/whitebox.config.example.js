@@ -37,8 +37,8 @@ export default {
     },
   },
 
-  // openai: {
-  //   apiKey: '',
+  // ai: {
+  //   apiKey: process.env.WB_OPENAI_API_KEY,   // AI SDK provider key (OpenAI today)
   // },
 
   // business: {

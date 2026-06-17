@@ -44,7 +44,7 @@ function makeDeps({ enabled, redactPii, webhooksConfig, insertedExposure } = {})
 
   const events = { publish: vi.fn(async () => {}) }
   const webhooks = { send: vi.fn(async () => {}) }
-  const openai = { embed: vi.fn(async texts => texts.map(() => [0.1])) }
+  const ai = { embed: vi.fn(async texts => texts.map(() => [0.1])) }
   const queue = {
     createQueue: vi.fn(() => ({ add: vi.fn(async () => {}) })),
     createWorker: vi.fn(() => ({ on: vi.fn() })),
@@ -58,7 +58,7 @@ function makeDeps({ enabled, redactPii, webhooksConfig, insertedExposure } = {})
     },
   }
 
-  return { db, queue, openai, events, webhooks, config, logger, exposures }
+  return { db, queue, ai, events, webhooks, config, logger, exposures }
 }
 
 describe('awareness factory', () => {

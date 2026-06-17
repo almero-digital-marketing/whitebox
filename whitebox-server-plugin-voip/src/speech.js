@@ -1,15 +1,15 @@
 import path from 'path'
 
-let language, recordsFolder, openai, logger, context
+let language, recordsFolder, ai, logger, context
 let business = null
 
 export async function init(deps) {
   language = deps.config.voip.language
   recordsFolder = deps.config.voip.recordsFolder
-  openai = deps.openai
+  ai = deps.ai
   logger = deps.logger
   context = deps.context
-  business = context ? await openai.expand(context) : null
+  business = context ? await ai.expand(context) : null
 }
 
 function buildPrompt() {
@@ -23,7 +23,7 @@ export async function transcribe(filename) {
   const localPath = path.join(recordsFolder, filename)
   const lang = language?.split('-')[0]
 
-  const text = await openai.transcribe(localPath, { language: lang, prompt: buildPrompt() })
+  const text = await ai.transcribe(localPath, { language: lang, prompt: buildPrompt() })
 
   if (!text) return text
 
@@ -44,6 +44,6 @@ async function normalize(transcript) {
     'Return only the corrected transcript, no commentary.',
   ].filter(Boolean).join('\n')
 
-  const result = await openai.prompt(system, transcript)
+  const result = await ai.prompt(system, transcript)
   return result
 }

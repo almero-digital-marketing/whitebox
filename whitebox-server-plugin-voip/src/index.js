@@ -27,7 +27,7 @@ export default {
   },
 
   async register(app, ctx) {
-    const { config, db, webhooks, events, connect, passports, sessions, openai, awareness } = ctx
+    const { config, db, webhooks, events, connect, passports, sessions, ai, awareness } = ctx
     const voipConfig = config.voip
     const logger = ctx.logger.child({ plugin: 'voip' })
 
@@ -37,7 +37,7 @@ export default {
 
     // Init module singletons in dependency order. Modules that depend on
     // another converted module import it directly; only non-module values
-    // (config, db, logger, connect, passports, sessions, openai, awareness,
+    // (config, db, logger, connect, passports, sessions, ai, awareness,
     // the per-plugin notify, the speech context) are threaded through init().
     phonebook.init({ config })
     calls.init({ db })
@@ -46,8 +46,8 @@ export default {
 
     const contextPath = voipConfig.context ? path.resolve(process.cwd(), voipConfig.context) : null
     const context     = contextPath && existsSync(contextPath) ? readFileSync(contextPath, 'utf8').trim() : null
-    const speechEnabled = !!(voipConfig.transcription && config.openai?.apiKey)
-    if (speechEnabled) await speech.init({ config, openai, logger, context })
+    const speechEnabled = !!(voipConfig.transcription && config.ai?.apiKey)
+    if (speechEnabled) await speech.init({ config, ai, logger, context })
 
     await ari.init({
       config, webhooks, events, logger,

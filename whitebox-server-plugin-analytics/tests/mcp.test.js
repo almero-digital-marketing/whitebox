@@ -19,7 +19,7 @@ function makeDeps({ recallHits = [], population = { count: 0, passports: [] }, t
       timeline:   vi.fn(async () => timeline),
       forget:     vi.fn(async () => forgot),
     },
-    openai: { prompt: vi.fn(async () => answer) },
+    ai: { prompt: vi.fn(async () => answer) },
     context: {
       collect: vi.fn(async () => collected),
       names:   () => Object.keys(collected),
@@ -114,7 +114,7 @@ describe('analytics plugin — MCP registration', () => {
 
   it('whitebox.context handles absent context registry gracefully', async () => {
     const mcp = makeMcpStub()
-    registerMcp({ mcp }, { awareness: makeDeps().awareness, openai: makeDeps().openai /* no context */ })
+    registerMcp({ mcp }, { awareness: makeDeps().awareness, ai: makeDeps().ai /* no context */ })
     const result = await mcp.tools.get('whitebox.context').handler({ passport_id: PID })
     const out = JSON.parse(result.content[0].text)
     expect(out).toEqual({ providers: [], context: {} })

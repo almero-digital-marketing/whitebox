@@ -14,23 +14,23 @@ vi.mock('../../src/awareness/store.js', () => ({
 function makeQuery({ recallResult, populationResult, embedding } = {}) {
   store.recallChunks.mockReset().mockImplementation(async () => recallResult ?? [])
   store.populationChunks.mockReset().mockImplementation(async () => populationResult ?? [])
-  const openai = {
+  const ai = {
     embed: vi.fn(async () => [embedding ?? [0.1, 0.2, 0.3]]),
   }
   const logger = { warn: vi.fn() }
-  query.init({ openai, logger })
-  return { query, store, openai }
+  query.init({ ai, logger })
+  return { query, store, ai }
 }
 
 describe('awareness.query', () => {
 
   it('recall embeds the query and forwards to store', async () => {
-    const { query, store, openai } = makeQuery({
+    const { query, store, ai } = makeQuery({
       recallResult: [{ id: 1, chunk_text: 'hi', similarity: 0.9 }],
     })
 
     const hits = await query.recall({ passport_id: 'p1', query: 'pricing', limit: 5 })
-    expect(openai.embed).toHaveBeenCalledWith(['pricing'])
+    expect(ai.embed).toHaveBeenCalledWith(['pricing'])
     expect(store.recallChunks).toHaveBeenCalledWith({
       passport_id: 'p1',
       embedding: [0.1, 0.2, 0.3],

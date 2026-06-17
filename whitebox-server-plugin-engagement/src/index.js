@@ -25,14 +25,14 @@ export default {
   },
 
   async register(app, ctx) {
-    const { config, db, connect, awareness, openai, logger: rootLogger } = ctx
+    const { config, db, connect, awareness, ai, logger: rootLogger } = ctx
     const logger = rootLogger.child({ plugin: 'engagement' })
     const engagementConfig = config.engagement || {}
 
     // Singleton modules: capture deps once via init(), in dependency order.
     // content first (sections/text/videos/images import it as a namespace),
     // then the consumers which only need awareness/logger via init.
-    content.init({ db, openai, config, logger })
+    content.init({ db, ai, config, logger })
     sections.init({ awareness, logger })
     text.init({ awareness, logger })
     videos.init({ awareness, logger })

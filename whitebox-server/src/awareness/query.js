@@ -2,21 +2,21 @@ import * as store from './store.js'
 
 // Dependencies captured once via init() — module-level singletons, no
 // wrapping factory closure. Matches the core pattern (passports, sessions, …).
-let openai
+let ai
 let logger
 
 export function init(deps) {
-  openai = deps.openai
+  ai = deps.ai
   logger = deps.logger
 }
 
 export async function recall({ passport_id, query, limit = 10 }) {
-  const [embedding] = await openai.embed([query])
+  const [embedding] = await ai.embed([query])
   return store.recallChunks({ passport_id, embedding, limit })
 }
 
 export async function population({ query, similarity = 0.75, limit = 1000 }) {
-  const [embedding] = await openai.embed([query])
+  const [embedding] = await ai.embed([query])
   const matches = await store.populationChunks({ embedding, similarity, limit })
 
   const byPassport = new Map()

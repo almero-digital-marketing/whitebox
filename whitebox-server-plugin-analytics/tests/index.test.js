@@ -12,7 +12,7 @@ function makeApp({ awarenessOverrides = {}, openaiOverrides = {}, context = null
     forget: vi.fn(async () => 5),
     ...awarenessOverrides,
   }
-  const openai = {
+  const ai = {
     prompt: vi.fn(async () => 'Synthesized answer with citations.'),
     ...openaiOverrides,
   }
@@ -22,12 +22,12 @@ function makeApp({ awarenessOverrides = {}, openaiOverrides = {}, context = null
   const ctx = {
     config: { analytics: { auth: { secret: SECRET } } },
     awareness,
-    openai,
+    ai,
     context,
     logger,
   }
   analyticsPlugin.register(app, ctx)
-  return { app, awareness, openai, context }
+  return { app, awareness, ai, context }
 }
 
 async function request(app, method, path, { auth, body } = {}) {
@@ -372,7 +372,7 @@ describe('analytics.ask', () => {
         similarity: 0.92,
       },
     ]
-    const { app, openai } = makeApp({
+    const { app, ai } = makeApp({
       awarenessOverrides: { recall: vi.fn(async () => hits) },
       openaiOverrides: { prompt: vi.fn(async () => 'On 2024-11-12, the user (arrived via google/spring-2025) read about Enterprise SSO.') },
     })
@@ -385,8 +385,8 @@ describe('analytics.ask', () => {
     expect(status).toBe(200)
     expect(body.answer).toContain('Enterprise SSO')
     expect(body.evidence).toHaveLength(1)
-    expect(openai.prompt).toHaveBeenCalledOnce()
-    const [system, user] = openai.prompt.mock.calls[0]
+    expect(ai.prompt).toHaveBeenCalledOnce()
+    const [system, user] = ai.prompt.mock.calls[0]
     expect(system).toContain('UTM attribution')
     expect(user).toContain('Enterprise tier includes SSO')
     expect(user).toContain('arrived via: google')
@@ -416,7 +416,7 @@ describe('analytics.ask', () => {
         utm_campaign: null,
       },
     ]
-    const { app, openai } = makeApp({
+    const { app, ai } = makeApp({
       awarenessOverrides: { recall: vi.fn(async () => hits) },
     })
 
@@ -425,7 +425,7 @@ describe('analytics.ask', () => {
       body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'Has this user seen our refund policy?' },
     })
 
-    const userPrompt = openai.prompt.mock.calls[0][1]
+    const userPrompt = ai.prompt.mock.calls[0][1]
     expect(userPrompt).toContain('mail/exposure')
     expect(userPrompt).toContain('[arrived via: newsletter / email / weekly-digest]')
     expect(userPrompt).toContain('web/exposure\nRefunds within 30 days')  // no UTM tag when null
@@ -433,7 +433,7 @@ describe('analytics.ask', () => {
   })
 
   it('returns "no relevant content" when recall is empty', async () => {
-    const { app, openai } = makeApp({
+    const { app, ai } = makeApp({
       awarenessOverrides: { recall: vi.fn(async () => []) },
     })
     const { status, body } = await request(app, 'POST', '/analytics/ask', {
@@ -443,12 +443,12 @@ describe('analytics.ask', () => {
     expect(status).toBe(200)
     expect(body.answer).toMatch(/no relevant content/i)
     expect(body.evidence).toEqual([])
-    expect(openai.prompt).not.toHaveBeenCalled()  // no LLM call when there's nothing to ground
+    expect(ai.prompt).not.toHaveBeenCalled()  // no LLM call when there's nothing to ground
   })
 
-  it('returns 500 when openai fails', async () => {
+  it('returns 500 when ai fails', async () => {
     const { app } = makeApp({
-      openaiOverrides: { prompt: vi.fn(async () => { throw new Error('openai down') }) },
+      openaiOverrides: { prompt: vi.fn(async () => { throw new Error('ai down') }) },
     })
     const { status } = await request(app, 'POST', '/analytics/ask', {
       auth: SECRET,
@@ -465,7 +465,7 @@ describe('analytics.ask', () => {
         ],
       })),
     }
-    const { app, openai } = makeApp({ context })
+    const { app, ai } = makeApp({ context })
 
     const { status, body } = await request(app, 'POST', '/analytics/ask', {
       auth: SECRET,
@@ -477,7 +477,7 @@ describe('analytics.ask', () => {
       'a1b2c3d4-5678-4abc-89de-1234567890ab',
       expect.objectContaining({ question: 'When does this customer check in?' })
     )
-    const userPrompt = openai.prompt.mock.calls[0][1]
+    const userPrompt = ai.prompt.mock.calls[0][1]
     expect(userPrompt).toContain('Structured context:')
     expect(userPrompt).toContain('crm:')
     expect(userPrompt).toContain('reservation')
@@ -492,7 +492,7 @@ describe('analytics.ask', () => {
         crm: [{ source: 'stripe', kind: 'subscription', external_id: 'sub_1', status: 'active' }],
       })),
     }
-    const { app, openai } = makeApp({
+    const { app, ai } = makeApp({
       awarenessOverrides: { recall: vi.fn(async () => []) },
       context,
     })
@@ -503,14 +503,14 @@ describe('analytics.ask', () => {
     })
 
     expect(status).toBe(200)
-    expect(openai.prompt).toHaveBeenCalledOnce()  // structured context is enough — LLM is invoked
+    expect(ai.prompt).toHaveBeenCalledOnce()  // structured context is enough — LLM is invoked
     expect(body.evidence).toEqual([])
     expect(body.context.crm).toHaveLength(1)
   })
 
   it('still short-circuits when BOTH structured context and recall are empty', async () => {
     const context = { collect: vi.fn(async () => ({ crm: [] })) }
-    const { app, openai } = makeApp({
+    const { app, ai } = makeApp({
       awarenessOverrides: { recall: vi.fn(async () => []) },
       context,
     })
@@ -520,7 +520,7 @@ describe('analytics.ask', () => {
     })
     expect(status).toBe(200)
     expect(body.answer).toMatch(/no relevant content/i)
-    expect(openai.prompt).not.toHaveBeenCalled()
+    expect(ai.prompt).not.toHaveBeenCalled()
   })
 
   it('passes limit through to awareness.recall', async () => {

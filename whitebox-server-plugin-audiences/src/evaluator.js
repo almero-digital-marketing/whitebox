@@ -12,10 +12,10 @@ import * as semantic from './features/semantic.js'
 import * as metric from './features/metric.js'
 import * as crm from './features/crm.js'
 
-let openai, config, logger, store
+let ai, config, logger, store
 
 export function init(deps) {
-  openai = deps.openai
+  ai = deps.ai
   config = deps.config || {}
   logger = deps.logger
   store = deps.store
@@ -52,7 +52,7 @@ export async function evaluate(rule, passportId) {
   return verdict(qualified, judged.score, judged.reason, { evidence, metric: m.values, facts })
 }
 
-// LLM judge with structured output. Replace openai.prompt with a generateObject
+// LLM judge with structured output. Replace ai.prompt with a generateObject
 // call when the facade exposes one — JSON-parse is the portable fallback.
 async function judge(rule, { evidence, metric: metrics, facts }) {
   const system = `You decide if a person matches an audience rule, based ONLY on the evidence provided.
@@ -62,7 +62,7 @@ Return STRICT JSON: {"match": boolean, "score": number 0..1, "reason": string}.
 - The numeric "metrics" and "facts" are already true; weigh them, don't recompute.`
   const user = JSON.stringify({ rule: { criteria: rule.criteria }, evidence, metrics, facts }, null, 2)
   try {
-    const raw = await openai.prompt(system, user)
+    const raw = await ai.prompt(system, user)
     const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
     return { match: !!json.match, score: Number(json.score) || 0, reason: String(json.reason || '') }
   } catch (err) {
@@ -125,6 +125,6 @@ export async function draftRule(description) {
 - "seed": short comma-separated topics for a semantic search.
 - "criteria": one precise sentence the AI will judge against.
 - Put topical intent in requires.semantic, counts/recency in requires.metric, CRM state in requires.crm.`
-  const raw = await openai.prompt(system, description)
+  const raw = await ai.prompt(system, description)
   return JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
 }

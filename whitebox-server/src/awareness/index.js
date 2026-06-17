@@ -34,8 +34,8 @@ export function init(deps) {
   ;({ notify } = createNotify({ webhooksConfig: cfg.webhooks, events: deps.events, webhooks: deps.webhooks }))
 
   store.init({ db })
-  if (enabled) memory.init({ store, openai: deps.openai, queue: deps.queue, config: deps.config, logger })
-  query.init({ store, openai: deps.openai, logger })
+  if (enabled) memory.init({ store, ai: deps.ai, queue: deps.queue, config: deps.config, logger })
+  query.init({ store, ai: deps.ai, logger })
 }
 
 export async function migrate() {

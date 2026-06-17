@@ -14,14 +14,14 @@ const FRAME_PROMPT = 'Describe this video frame in one sentence. Focus on subjec
 // Dependencies captured once via init() — module-level singletons, no
 // wrapping factory closure. Matches the core pattern (passports, sessions, …).
 let db
-let openai
+let ai
 let logger
 let image
 let video
 
 export function init(deps) {
   db = deps.db
-  openai = deps.openai
+  ai = deps.ai
   logger = deps.logger
 
   const cfg = deps.config.engagement || {}
@@ -54,7 +54,7 @@ export async function resolveImage(url, providedDescription) {
 
   const { buf } = await fetchAndResize(url)
   const dataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`
-  const description = await openai.vision(IMAGE_PROMPT, dataUrl, { detail: image.detail, maxTokens: 200 })
+  const description = await ai.vision(IMAGE_PROMPT, dataUrl, { detail: image.detail, maxTokens: 200 })
 
   return upsert({
     url, kind: 'image', text: description, source_kind: 'auto',
@@ -103,7 +103,7 @@ export async function resolveVideo(url, providedTranscript) {
     const audioPath = await extractAudio(videoPath, tmp)
 
     const [whisper, frames] = await Promise.all([
-      openai.transcribe(audioPath, { response_format: 'verbose_json' }),
+      ai.transcribe(audioPath, { response_format: 'verbose_json' }),
       video.extractVisual ? extractAndDescribeFrames(videoPath, tmp) : Promise.resolve([]),
     ])
 
@@ -184,7 +184,7 @@ async function extractAndDescribeFrames(videoPath, tmpDir) {
     try {
       const buf = await sharp(framePath).jpeg({ quality: 80 }).toBuffer()
       const dataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`
-      const desc = await openai.vision(FRAME_PROMPT, dataUrl, { detail: video.visionDetail, maxTokens: 80 })
+      const desc = await ai.vision(FRAME_PROMPT, dataUrl, { detail: video.visionDetail, maxTokens: 80 })
       return { t: frame.t, description: desc }
     } catch (err) {
       logger.warn({ err, t: frame.t }, 'Frame describe failed')

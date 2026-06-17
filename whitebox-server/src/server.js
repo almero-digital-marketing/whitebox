@@ -15,7 +15,7 @@ import * as webhooks from './webhooks.js'
 import * as connect from './connect.js'
 import * as passports from './passports.js'
 import * as sessions from './sessions.js'
-import * as openai from './openai.js'
+import * as ai from './ai.js'
 import * as templates from './templates.js'
 import * as awareness from './awareness/index.js'
 import * as context from './context.js'
@@ -41,7 +41,7 @@ async function start() {
 
   await passports.init({ db: db.get(), lock, config })
   await sessions.init({ db: db.get(), passports })
-  await openai.init({ config })
+  await ai.init({ config })
 
   let template = null
   if (config.mikser) {
@@ -51,7 +51,7 @@ async function start() {
   }
 
   awareness.init({
-    db: db.get(), queue, openai, events, webhooks, config, logger,
+    db: db.get(), queue, ai, events, webhooks, config, logger,
   })
   await awareness.migrate()
   logger.info('Awareness ready')
@@ -84,7 +84,7 @@ async function start() {
     connect,
     passports,
     sessions,
-    openai,
+    ai,
     template,
     awareness,
     context,

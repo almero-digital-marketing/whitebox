@@ -76,7 +76,7 @@ export function formatHitsAsEvidence(hits) {
 // `{ answer, evidence, context }` object directly. Used by the MCP `whitebox.ask`
 // tool and by the HTTP handler below; the only difference is who handles the
 // transport / error response.
-export async function runAsk({ passport_id, question, limit = 10 }, { awareness, openai, context }) {
+export async function runAsk({ passport_id, question, limit = 10 }, { awareness, ai, context }) {
   const [structured, hits] = await Promise.all([
     context?.collect ? context.collect(passport_id, { question, limit: 20 }) : Promise.resolve({}),
     awareness.recall({ passport_id, query: question, limit }),
@@ -102,18 +102,18 @@ export async function runAsk({ passport_id, question, limit = 10 }, { awareness,
   if (evidence)      sections.push(`Evidence:\n${evidence}`)
   sections.push(`Question: ${question}`)
 
-  const answer = await openai.prompt(ASK_SYSTEM_PROMPT, sections.join('\n\n'))
+  const answer = await ai.prompt(ASK_SYSTEM_PROMPT, sections.join('\n\n'))
   return { answer, evidence: hits, context: structured }
 }
 
 // Express handler factory. Closes over the deps and wraps runAsk with
 // validation + transport.
-export function createAskHandler({ awareness, openai, context, logger }) {
+export function createAskHandler({ awareness, ai, context, logger }) {
   return async function ask(req, res) {
     const parsed = askSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
     try {
-      res.json(await runAsk(parsed.data, { awareness, openai, context }))
+      res.json(await runAsk(parsed.data, { awareness, ai, context }))
     } catch (err) {
       logger.error({ err }, 'ask failed')
       res.status(500).json({ error: 'ask failed' })

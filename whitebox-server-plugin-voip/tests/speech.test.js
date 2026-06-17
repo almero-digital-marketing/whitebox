@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
 import config from '../../whitebox-server/whitebox.config.js'
-import * as openai from 'whitebox-server/openai'
+import * as ai from 'whitebox-server/ai'
 import * as speech from '../src/speech.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -18,8 +18,8 @@ const cfg = {
 }
 
 beforeAll(async () => {
-  await openai.init({ config })
-  await speech.init({ config: cfg, openai, logger: console, context })
+  await ai.init({ config })
+  await speech.init({ config: cfg, ai, logger: console, context })
 })
 
 describe('transcribe', () => {
