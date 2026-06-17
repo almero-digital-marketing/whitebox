@@ -68,6 +68,13 @@ export async function insertChunks(contentHash, chunks) {
     .ignore()
 }
 
+// Wipe ALL awareness content (every passport's exposures + the shared chunks).
+// Dev/demo reset only — gated behind the server's --reset flag; never part of
+// normal operation. Per-passport deletion is deletePassport (GDPR forget).
+export async function reset() {
+  await db.raw(`TRUNCATE ${EXPOSURES}, ${CHUNKS} RESTART IDENTITY`)
+}
+
 // Delete chunks whose content_hash is no longer referenced by any exposure.
 // Returns number of orphan chunks removed.
 export async function gcOrphanChunks() {

@@ -47,25 +47,30 @@ node serve.mjs            # starts whitebox-server too, then serves on :5273
 
 One browser session is one passport — so the [console](../console)'s **All customers** / cohort / population questions have nothing to aggregate. `seed.mjs` fixes that: it creates synthetic patients across a handful of personas (whitening-cosmetic, invisalign-ortho, implant-restorative, new-patient-checkup, emergency-pain), driving the **same ingress the browser uses** — `/sessions/resolve`, `/engagement/events`, `/crm/observe`, and a real `voip.pick → /voip/calls` for clinic-call transcripts. Everything is embedded by the running server, so semantic recall/population actually matches.
 
+The simplest path is two server flags — no separate seed run, no second terminal:
+
 ```bash
 cd examples/integration
-node serve.mjs &                 # (or have whitebox-server up on :3000)
-node seed.mjs                    # ~30 patients
-COUNT=60 node seed.mjs           # more
+node serve.mjs --reset --seed    # bring up the demo, wipe, then seed ~30 patients
+COUNT=60 node serve.mjs --reset --seed
+```
+
+`serve.mjs` forwards the flags to the whitebox-server it starts. **`--reset`** wipes all awareness data on boot; **`--seed`** runs the seed once the server is listening (it spawns `seed.mjs` against itself). Use either alone — `--seed` to add to the current base, `--reset` to clear without reseeding. You can also drive the server directly:
+
+```bash
+cd whitebox-server
+node --env-file=.env src/server.js --reset --seed
+```
+
+Or run the seed by hand against a server that's already up:
+
+```bash
+node examples/integration/seed.mjs      # ~30 patients   (COUNT=60 for more)
 ```
 
 Give embeddings a few seconds, then open the console's **All customers** tab and ask *"What treatments are patients most interested in?"* or run a cohort on *"teeth whitening"* / *"dental implants"*. The personas read the service copy (whitening, Invisalign, implants, pricing/insurance) and fire matching CRM observations, so cohorts and themes are real.
 
-### Reset (start clean)
-
-To wipe the seeded data and start over — e.g. after changing the theme, or to drop a mixed base:
-
-```bash
-node examples/integration/reset.mjs    # TRUNCATE awareness exposures + chunks
-node examples/integration/seed.mjs     # repopulate
-```
-
-`reset.mjs` reads the DB config straight from `whitebox-server/.env`, so no `--env-file` is needed. It's **destructive** — it clears *all* awareness content (every passport's reads / observations / calls) on that DB, so only point it at a demo/dev database. (The server can keep running; the seed re-embeds through it.)
+> **`--reset` is destructive** — it clears *all* awareness content (every passport's reads / observations / calls) on whatever DB `whitebox-server/.env` points at. Demo/dev databases only.
 
 ## Verify on the server
 

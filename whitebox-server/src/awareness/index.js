@@ -95,6 +95,13 @@ export async function record(event) {
   return exposure
 }
 
+// Dev/demo reset — wipe all awareness content. Gated by the server's --reset
+// flag; not a normal-operation primitive.
+export async function reset() {
+  if (!enabled) return
+  await store.reset()
+}
+
 export async function forget({ passport_id }) {
   if (!enabled) return 0
   const deleted = await store.deletePassport(passport_id)

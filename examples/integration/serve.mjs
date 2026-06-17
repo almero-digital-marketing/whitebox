@@ -51,7 +51,9 @@ function portOpen(port, host = '127.0.0.1') {
 
 function startServer() {
   console.log(`[demo] starting whitebox-server (${SERVER_DIR}) …`)
-  child = spawn('node', ['--env-file-if-exists=.env', 'src/server.js'], {
+  // Forward our CLI flags (e.g. --reset --seed) to the server, so
+  // `node serve.mjs --reset --seed` wipes + seeds while bringing up the demo.
+  child = spawn('node', ['--env-file-if-exists=.env', 'src/server.js', ...process.argv.slice(2)], {
     cwd: SERVER_DIR,
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
