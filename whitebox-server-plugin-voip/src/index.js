@@ -7,7 +7,6 @@ import express from 'express'
 import * as calls from './calls.js'
 import * as phonebook from './phonebook.js'
 import * as pool from './pool.js'
-import * as ari from './ari.js'
 import * as encoder from './encoder.js'
 import * as speech from './speech.js'
 import createNotify from 'whitebox-server/notify'
@@ -62,6 +61,10 @@ export default {
     // still assigned and shown to visitors over the socket — only the live
     // inbound-call ingestion needs a PBX (or a telephony-provider webhook).
     if (voipConfig.ari?.url) {
+      // Lazy-load: the ARI client drags in a deprecated request/tough-cookie stack
+      // (which warns about the legacy punycode builtin). Only pay that — and emit
+      // the warning — when a PBX is actually configured; call-tracking doesn't need it.
+      const ari = await import('./ari.js')
       await ari.init({
         config, webhooks, events, logger,
         passports, sessions, awareness, speechEnabled,
