@@ -287,7 +287,7 @@ Response:
 - `stats` — base-wide totals + channel/direction breakdown, always present. Use it for "how many" questions.
 - `cohort.count` — distinct customers whose content matched the question (the semantic cohort, not the whole base). `0` means nothing matched the specific concept; the answer is then drawn from the base-wide sample (and `evidence[].similarity` is `null`).
 - `evidence[].passport_count` — how many distinct customers that content reached; the model uses this to ground magnitude.
-- Parameters: `similarity` (default `0.6` — looser than raw `population` so thematic questions have evidence to work with), `limit` (max chunks scanned, default 1000).
+- Parameters: `similarity` (default `0.5` — a full natural-language question embeds further from the content than a bare concept, so this is looser than raw `population`'s `0.75`; at `0.6` a question like "what are patients asking about insurance?" matched *nobody* despite many having read the insurance copy, which forced a misleading empty-cohort fallback), `limit` (max chunks scanned, default 1000).
 - Only short-circuits (no LLM call) when the base is genuinely empty: `{ answer: "There are no customers in the base yet.", cohort: { count: 0 }, stats, evidence: [] }`.
 
 Like `/ask`, it delegates to the awareness core (`awareness.askPopulation`) and accepts the same `instruction` / `schema` overrides from there. There is **no** per-customer structured-context step — the context registry is per-passport.

@@ -146,19 +146,17 @@ export const ASK_POPULATION_SYSTEM_PROMPT = [
   '',
   'You are given:',
   '  - Customer base: the total number of customers and a breakdown of content events by channel and direction. Use this for counting/aggregate questions.',
-  '  - Cohort size: the number of DISTINCT customers whose content semantically matches the question. 0 means no customer has content specific to that concept.',
-  '  - Evidence — one of:',
-  '      • matching evidence (when a cohort matched the question), or',
-  '      • a base-wide content sample, explicitly NOT filtered by the question (for broad/overview questions).',
-  '    Each item is tagged with channel (mail/voip/web/crm), direction (exposure/expression/conversation/observation), and "seen by N" — how many distinct customers it reached.',
+  '  - Cohort size: how many DISTINCT customers have content closely matching the question\'s wording. This can read LOW even when many customers engaged with the topic — their content is phrased differently — so it is a hint, not the headline number.',
+  '  - Evidence — either content matching the question, or (for broad questions) a base-wide content sample explicitly NOT filtered by the question. Each item is tagged with channel (mail/voip/web/crm), direction (exposure/expression/conversation/observation), and "seen by N" — how many distinct customers it reached.',
   '',
   'Rules:',
   '- Answer at the population level: aggregate, quantify, find patterns. "N customers…", "the most common…", "a recurring theme…".',
-  '- For "how many customers…" questions, use the Customer base totals and breakdown — those are exact.',
-  '- For targeted questions, lean on the cohort size + matching evidence. If the cohort size is 0, say plainly that no customers have content about that specific concept (do NOT infer relevance from an unfiltered base sample).',
-  '- For broad/overview questions ("what are customers interested in", "what\'s going on"), summarize themes from the base-wide sample. Weight expressions (what customers said/wrote) over exposures (what we sent) as interest signal.',
-  '- Ground magnitude in the numbers given. Do not fabricate precise figures; approximate honestly ("a sizable share", "a handful") when an exact count is not derivable.',
-  '- A cohort is everyone whose content matches the question — not necessarily the whole base. Frame answers as "among customers who…" when that distinction matters.',
+  '- Ground every magnitude in the numbers actually shown — the per-item "seen by N" counts and the customer-base totals — NOT the cohort size alone.',
+  '- Do NOT claim "no customers" (or "nothing matches") about a topic the evidence or totals clearly show customers engaged with — that contradicts the data you are citing. Only call a topic absent when neither the evidence nor the totals mention it, and then say so without also describing it.',
+  '- When the evidence is a base-wide sample (not filtered by the question), summarize only the themes actually present in it; do not invent topics it does not contain.',
+  '- Weight expressions / conversations / observations (what customers said, asked, clicked) over passive exposures (what we showed) as interest signal.',
+  '- Do not fabricate precise figures; approximate honestly ("a sizable share", "a handful") when an exact count is not derivable.',
+  '- A cohort is customers whose content matches the question — not necessarily the whole base. Frame answers as "among customers who…" when that distinction matters.',
   '- If the base is empty or the evidence is too thin to support a claim, say so plainly.',
   '- Be concise. No preamble.',
 ].join('\n')
@@ -217,8 +215,12 @@ export function formatPopulationEvidence(groups) {
 }
 
 // askPopulation({ question, similarity?, limit?, sample?, instruction?, schema? })
-//   similarity — cohort match threshold (default 0.6, looser than the raw
-//                population() default so thematic questions have evidence to work with).
+//   similarity — cohort match threshold (default 0.5). A full natural-language
+//                question embeds further from the content than a bare concept, so
+//                this is looser than the raw population() default (0.75) — at 0.6
+//                even "what are patients asking about insurance?" matched nobody
+//                despite 30 having read the insurance copy, which then forced the
+//                misleading "no customers match" fallback.
 //   sample     — max distinct chunks fed to the LLM as evidence.
 //   instruction / schema — same override / structured-output contract as ask().
 //
@@ -227,7 +229,7 @@ export function formatPopulationEvidence(groups) {
 // cohort's matching content. When it doesn't — a whole-base/overview question,
 // or a counting question — it falls back to a query-independent base sample so
 // the answer is still grounded instead of "nothing matched".
-export async function askPopulation({ question, similarity = 0.6, limit = 1000, sample = 60, instruction, schema } = {}) {
+export async function askPopulation({ question, similarity = 0.5, limit = 1000, sample = 60, instruction, schema } = {}) {
   const [stats, cohort] = await Promise.all([
     populationStats ? populationStats() : Promise.resolve({ customers: 0, exposures: 0, breakdown: [] }),
     population({ query: question, similarity, limit }),
