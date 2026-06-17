@@ -184,7 +184,8 @@ tabs.forEach(t => t.addEventListener('click', () => {
 const chips = $('#chips')
 for (const q of PREDEFINED) {
   const b = document.createElement('button'); b.className = 'chip'; b.textContent = q
-  b.addEventListener('click', () => { qEl.value = q; ask(q) })
+  // Prefill the ask box (don't auto-ask) so you can tweak it first, then Ask/Enter.
+  b.addEventListener('click', () => { qEl.value = q; qEl.focus() })
   chips.appendChild(b)
 }
 $('#ask').addEventListener('click', () => { const q = qEl.value.trim(); if (q) ask(q) })
@@ -212,7 +213,8 @@ const popchips = $('#popchips')
 const popqEl = $('#popaskq')
 for (const q of POPULATION_QUESTIONS) {
   const b = document.createElement('button'); b.className = 'chip'; b.textContent = q
-  b.addEventListener('click', () => { popqEl.value = q; askPopulation(q) })
+  // Prefill only — click Ask all / Enter to run.
+  b.addEventListener('click', () => { popqEl.value = q; popqEl.focus() })
   popchips.appendChild(b)
 }
 $('#askpop').addEventListener('click', () => { const q = popqEl.value.trim(); if (q) askPopulation(q) })

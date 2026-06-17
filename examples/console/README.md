@@ -22,10 +22,10 @@ Answers from both tabs accumulate in the shared log below, each badged by scope.
 
 ## Use it
 
-1. **All customers** tab (no passport) — click an *Ask all* chip or type a base-wide question and read the grounded answer; evidence rows show how many customers each chunk reached. Use the **cohort size** box (with one-click example concepts) for a raw match count.
+1. **All customers** tab (no passport) — click a question chip to drop it into the box (it doesn't ask on its own — tweak it, then **Ask all** or Enter), or type your own; evidence rows show how many customers each chunk reached. Use the **cohort size** box (with one-click example concepts) for a raw match count.
 2. To go per-customer, open the integration demo, generate some activity for a visitor, and copy its **passport id**.
 3. Switch to the **This customer** tab and paste that id into its **passport** field.
-4. Click a question chip or type your own; expand **evidence** for the cited chunks. **Inspect** the raw memory with `Timeline`, `Context (CRM state)`, and `Recall` (with one-click example queries).
+4. Click a question chip to prefill the box (then **Ask** or Enter), or type your own; expand **evidence** for the cited chunks. **Inspect** the raw memory with `Timeline`, `Context (CRM state)`, and `Recall` (with one-click example queries).
 
 The chips are written to match what the [integration demo](../integration) (Brightsmile Dental) actually records — service reads (whitening, Invisalign, implants, pricing/insurance), CRM observations (registration, appointments, treatment plans, payment plans, emergencies), clinic-call transcripts, and callback requests — so they return grounded answers rather than "nothing matched". Base-wide examples: *"What treatments are patients most interested in?"*, *"How many patients have asked about teeth whitening?"*, *"What do patients ask about when they call the clinic?"*. Per-customer examples: *"Have they accepted or viewed a treatment plan?"*, *"Did they call the clinic or request a callback?"*. Recall/cohort concept chips (*teeth whitening*, *dental implants*, *Invisalign*, *payment plans*, *emergency appointment*) appear verbatim in the demo content.
 
