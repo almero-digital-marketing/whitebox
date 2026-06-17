@@ -7,14 +7,14 @@ export default {
   name: 'analytics',
 
   async register(app, ctx) {
-    const { config, awareness, ai, context, passports, logger: rootLogger } = ctx
+    const { config, awareness, context, passports, logger: rootLogger } = ctx
     const logger = rootLogger.child({ plugin: 'analytics' })
     const analyticsConfig = config.analytics || {}
 
     const requireAuth = createAuth({ secret: analyticsConfig.auth?.secret, logger })
 
-    mountRoutes(app, { requireAuth, awareness, ai, context, logger })
-    registerMcp(ctx, { awareness, ai, context })
+    mountRoutes(app, { requireAuth, awareness, context, logger })
+    registerMcp(ctx, { awareness, context })
 
     // Ad-network reporting: standard conversion events via the shared adapters.
     // Configure under config.analytics.networks; call reportStandardEvent() from

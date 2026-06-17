@@ -6,13 +6,12 @@
 // retrieval primitives the HTTP /analytics endpoints expose — but with
 // the tool descriptions and JSON Schema tuned for LLM consumption.
 //
-// `whitebox.ask` shares its implementation with the HTTP /ask endpoint
-// via runAsk(), so the synthesis behaviour stays in lockstep.
+// `whitebox.ask` delegates to the core awareness.ask primitive — the same call
+// the HTTP /ask endpoint makes — so the synthesis behaviour stays in lockstep.
 
 import { z } from 'zod'
-import { runAsk } from './ask.js'
 
-export function registerMcp(ctx, { awareness, ai, context }) {
+export function registerMcp(ctx, { awareness, context }) {
   if (!ctx.mcp) return
 
   ctx.mcp.tool({
@@ -24,7 +23,7 @@ export function registerMcp(ctx, { awareness, ai, context }) {
       limit:       z.number().int().positive().max(50).optional(),
     },
     handler: async (args) => {
-      const result = await runAsk(args, { awareness, ai, context })
+      const result = await awareness.ask(args)
       return { content: [{ type: 'text', text: result.answer }] }
     },
   })

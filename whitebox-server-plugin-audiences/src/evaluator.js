@@ -8,9 +8,29 @@
 // The LLM judges *meaning*; it never counts (metric does) or invents state (crm
 // does). Output is structured { match, score, reason }. See docs/04-evaluator.md.
 
+import { z } from 'zod'
 import * as semantic from './features/semantic.js'
 import * as metric from './features/metric.js'
 import * as crm from './features/crm.js'
+
+const VERDICT = z.object({
+  match:  z.boolean(),
+  score:  z.number().min(0).max(1),
+  reason: z.string(),
+})
+
+const DRAFT = z.object({
+  name:      z.string(),
+  seed:      z.string(),
+  criteria:  z.string(),
+  threshold: z.number().min(0).max(1),
+  ttl_days:  z.number().int().positive(),
+  requires:  z.object({
+    semantic: z.array(z.string()),
+    metric:   z.array(z.any()),
+    crm:      z.array(z.string()),
+  }),
+})
 
 let ai, config, logger, store
 
@@ -52,21 +72,19 @@ export async function evaluate(rule, passportId) {
   return verdict(qualified, judged.score, judged.reason, { evidence, metric: m.values, facts })
 }
 
-// LLM judge with structured output. Replace ai.prompt with a generateObject
-// call when the facade exposes one — JSON-parse is the portable fallback.
+// LLM judge with structured output via the core ai.object facade — the model
+// returns an object validated against VERDICT, no JSON-parsing.
 async function judge(rule, { evidence, metric: metrics, facts }) {
   const system = `You decide if a person matches an audience rule, based ONLY on the evidence provided.
-Return STRICT JSON: {"match": boolean, "score": number 0..1, "reason": string}.
-- "score" is your confidence the person matches the rule.
+- "score" is your confidence (0..1) the person matches the rule.
 - "reason" cites the concrete evidence (channel + what they did). Do not invent facts.
 - The numeric "metrics" and "facts" are already true; weigh them, don't recompute.`
   const user = JSON.stringify({ rule: { criteria: rule.criteria }, evidence, metrics, facts }, null, 2)
   try {
-    const raw = await ai.prompt(system, user)
-    const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
-    return { match: !!json.match, score: Number(json.score) || 0, reason: String(json.reason || '') }
+    const v = await ai.object(system, user, VERDICT)
+    return { match: !!v.match, score: Number(v.score) || 0, reason: String(v.reason || '') }
   } catch (err) {
-    logger?.warn?.({ err }, 'audiences: judge parse failed')
+    logger?.warn?.({ err }, 'audiences: judge failed')
     return { match: false, score: 0, reason: 'judge error' }
   }
 }
@@ -119,12 +137,10 @@ export const availableFacts = () => crm.availableKeys()
 
 // Draft a structured rule from a natural-language description (MCP draft_rule).
 export async function draftRule(description) {
-  const system = `Turn a marketer's audience description into a draft rule as STRICT JSON:
-{"name","seed","criteria","threshold":0.7,"ttl_days":30,
- "requires":{"semantic":[],"metric":[],"crm":[]}}
+  const system = `Turn a marketer's audience description into a draft rule.
 - "seed": short comma-separated topics for a semantic search.
 - "criteria": one precise sentence the AI will judge against.
-- Put topical intent in requires.semantic, counts/recency in requires.metric, CRM state in requires.crm.`
-  const raw = await ai.prompt(system, description)
-  return JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
+- Put topical intent in requires.semantic, counts/recency in requires.metric, CRM state in requires.crm.
+- Default threshold 0.7 and ttl_days 30 unless the description implies otherwise.`
+  return ai.object(system, description, DRAFT)
 }

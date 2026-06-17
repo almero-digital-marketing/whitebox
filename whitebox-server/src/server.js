@@ -50,8 +50,9 @@ async function start() {
     template = templates
   }
 
+  context.init({ logger })
   awareness.init({
-    db: db.get(), queue, ai, events, webhooks, config, logger,
+    db: db.get(), queue, ai, events, webhooks, config, logger, context,
   })
   await awareness.migrate()
   logger.info('Awareness ready')
@@ -68,7 +69,6 @@ async function start() {
   }
 
   const plugins = {}
-  context.init({ logger })
   mcp.init({ config: config.mcp, logger })
 
   await loadPlugins(app, {

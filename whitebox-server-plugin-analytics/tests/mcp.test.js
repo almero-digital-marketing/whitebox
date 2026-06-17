@@ -18,8 +18,8 @@ function makeDeps({ recallHits = [], population = { count: 0, passports: [] }, t
       population: vi.fn(async () => population),
       timeline:   vi.fn(async () => timeline),
       forget:     vi.fn(async () => forgot),
+      ask:        vi.fn(async () => ({ answer, evidence: recallHits, context: collected })),
     },
-    ai: { prompt: vi.fn(async () => answer) },
     context: {
       collect: vi.fn(async () => collected),
       names:   () => Object.keys(collected),
@@ -43,21 +43,19 @@ describe('analytics plugin — MCP registration', () => {
     ])
   })
 
-  it('whitebox.ask returns the synthesized answer text and runs recall + context in parallel', async () => {
+  it('whitebox.ask delegates to awareness.ask and returns its answer text', async () => {
     const mcp = makeMcpStub()
-    const deps = makeDeps({
-      recallHits: [{ chunk_text: 'Enterprise SSO', ts: new Date('2026-05-01'), channel: 'web', direction: 'exposure' }],
-      collected:  { crm: [{ kind: 'subscription', status: 'active' }] },
-      answer:     'They have an active subscription and have read about SSO.',
-    })
+    const deps = makeDeps({ answer: 'They have an active subscription and have read about SSO.' })
     registerMcp({ mcp }, deps)
 
     const result = await mcp.tools.get('whitebox.ask').handler({
       passport_id: PID,
       question: 'What does this customer have going on?',
     })
-    expect(deps.awareness.recall).toHaveBeenCalled()
-    expect(deps.context.collect).toHaveBeenCalled()
+    expect(deps.awareness.ask).toHaveBeenCalledWith(expect.objectContaining({
+      passport_id: PID,
+      question: 'What does this customer have going on?',
+    }))
     expect(result.content[0].text).toContain('active subscription')
   })
 
@@ -114,7 +112,7 @@ describe('analytics plugin — MCP registration', () => {
 
   it('whitebox.context handles absent context registry gracefully', async () => {
     const mcp = makeMcpStub()
-    registerMcp({ mcp }, { awareness: makeDeps().awareness, ai: makeDeps().ai /* no context */ })
+    registerMcp({ mcp }, { awareness: makeDeps().awareness /* no context */ })
     const result = await mcp.tools.get('whitebox.context').handler({ passport_id: PID })
     const out = JSON.parse(result.content[0].text)
     expect(out).toEqual({ providers: [], context: {} })

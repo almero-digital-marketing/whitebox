@@ -4,7 +4,7 @@
 // prompt / embed / vision / transcribe / expand — never the provider directly.
 
 import { createOpenAI } from '@ai-sdk/openai'
-import { generateText, embedMany, experimental_transcribe as aiTranscribe } from 'ai'
+import { generateText, generateObject, embedMany, experimental_transcribe as aiTranscribe } from 'ai'
 import { readFile } from 'fs/promises'
 import { encode } from '@toon-format/toon'
 
@@ -30,6 +30,15 @@ export async function prompt(system, user) {
     prompt: user,
   })
   return text
+}
+
+// Structured output — the model returns an object validated against `schema`
+// (a Zod schema). Used for classification / verdicts where a parsed JSON shape
+// is needed rather than prose.
+export async function object(system, user, schema) {
+  if (!provider) throw new Error('AI provider not configured')
+  const { object } = await generateObject({ model: provider(CHAT_MODEL), schema, system, prompt: user })
+  return object
 }
 
 export async function embed(texts, { model = EMBED_MODEL } = {}) {

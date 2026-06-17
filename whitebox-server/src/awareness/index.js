@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import * as store from './store.js'
 import * as memory from './memory.js'
 import * as query from './query.js'
+import * as askCore from './ask.js'
 import createNotify from '../notify.js'
 import { redact } from './pii.js'
 
@@ -36,6 +37,8 @@ export function init(deps) {
   store.init({ db })
   if (enabled) memory.init({ store, ai: deps.ai, queue: deps.queue, config: deps.config, logger })
   query.init({ store, ai: deps.ai, logger })
+  // The reasoning primitive: recall + registered context → grounded synthesis.
+  askCore.init({ ai: deps.ai, context: deps.context, recall })
 }
 
 export async function migrate() {
@@ -123,4 +126,9 @@ export async function population(args) {
 export async function timeline(args) {
   if (!enabled) return []
   return store.timeline(args)
+}
+
+export async function ask(args) {
+  if (!enabled) return { answer: 'Awareness is disabled.', evidence: [], context: {} }
+  return askCore.ask(args)
 }
