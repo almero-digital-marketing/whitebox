@@ -34,7 +34,7 @@ const DEFAULT_OPTS = {
   minPartialRatio: 0.5,
   sequential: false,
   readingLineRatio: 0,   // sequential: release a block scrolled off the top once its bottom rises above this fraction of the viewport (0 = off)
-  endRegion: false,      // sequential: let blocks in the document's last screen count even while pinned in the bottom band
+  endOfDocument: false,      // sequential: let blocks in the document's last screen count even while pinned in the bottom band
 }
 
 export default function createTracker({
@@ -133,7 +133,7 @@ export default function createTracker({
     // screen, blocks pinned in the bottom band (they can't be scrolled up into
     // it — there's nothing below) still count, so the final paragraphs aren't
     // lost when there's no whitespace below them.
-    const docH = (cfg.endRegion && typeof document !== 'undefined') ? document.documentElement.scrollHeight : 0
+    const docH = (cfg.endOfDocument && typeof document !== 'undefined') ? document.documentElement.scrollHeight : 0
     const nearEnd = docH > 0 && scrollY + vh > docH - vh
     const best = new Map()   // groupKey -> { s, top }
     for (const el of observed) {

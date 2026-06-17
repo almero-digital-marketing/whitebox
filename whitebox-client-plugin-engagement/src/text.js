@@ -23,7 +23,7 @@ const DEFAULTS = {
   tickMs: 250,
   sequential: true,        // read top-to-bottom: only the topmost visible block accumulates
   readingLineRatio: 0.25,  // a block read & scrolled up releases focus once its middle passes above the top 25%
-  endRegion: true,         // count end-of-document blocks that can't be scrolled up into the band
+  endOfDocument: true,         // count end-of-document blocks that can't be scrolled up into the band
 }
 
 function classify(el) {

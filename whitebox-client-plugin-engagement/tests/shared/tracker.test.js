@@ -252,7 +252,7 @@ describe('tracker state machine', () => {
       requiredMs: () => 10_000,
       buildPayload: (el) => ({ text: el.textContent }),
       onRead,
-      options: { tickMs: 20, sequential: true, minRatio: 0.35, endRegion: true },
+      options: { tickMs: 20, sequential: true, minRatio: 0.35, endOfDocument: true },
     })
     tracker.start()
     document.body.innerHTML = `<p>last</p>`
