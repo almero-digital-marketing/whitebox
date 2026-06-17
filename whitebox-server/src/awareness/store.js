@@ -111,6 +111,63 @@ export async function recallChunks({ passport_id, embedding, limit = 10 }) {
   return result.rows ?? result
 }
 
+// Base-wide aggregates — no embedding, no query. Cheap counting for "how many
+// customers do we have / how active are they" and for grounding population-scope
+// answers even when a question maps to no semantic cohort.
+export async function populationStats() {
+  const totals = await db(EXPOSURES)
+    .countDistinct({ customers: 'passport_id' })
+    .count({ exposures: '*' })
+    .first()
+  const breakdown = await db(EXPOSURES)
+    .select('channel', 'direction')
+    .count({ exposures: '*' })
+    .countDistinct({ customers: 'passport_id' })
+    .groupBy('channel', 'direction')
+    .orderBy('exposures', 'desc')
+  return {
+    customers: Number(totals?.customers || 0),
+    exposures: Number(totals?.exposures || 0),
+    breakdown: breakdown.map(b => ({
+      channel: b.channel,
+      direction: b.direction,
+      exposures: Number(b.exposures),
+      customers: Number(b.customers),
+    })),
+  }
+}
+
+// A representative sample of base-wide content for overview questions — NOT
+// filtered by any query. One row per distinct content, carrying how many distinct
+// customers it reached. Ordered by reach first (the strongest population signal —
+// what the most customers have in common), with an expression/conversation
+// tiebreak so the genuine "voice of the customer" outranks broadcast content of
+// equal reach, then recency.
+export async function sampleContent({ limit = 40 } = {}) {
+  const result = await db.raw(
+      `WITH reach AS (
+         SELECT content_hash,
+                COUNT(DISTINCT passport_id) AS customers,
+                MAX(ts) AS latest,
+                (ARRAY_AGG(channel   ORDER BY ts DESC))[1] AS channel,
+                (ARRAY_AGG(direction ORDER BY ts DESC))[1] AS direction
+         FROM ${EXPOSURES}
+         WHERE content_hash IS NOT NULL
+         GROUP BY content_hash
+       )
+       SELECT r.customers, r.latest AS ts, r.channel, r.direction, c.chunk_text
+       FROM reach r
+       JOIN ${CHUNKS} c ON c.content_hash = r.content_hash AND c.chunk_index = 0
+       ORDER BY
+         r.customers DESC,
+         (CASE WHEN r.direction IN ('expression', 'conversation') THEN 0 ELSE 1 END),
+         r.latest DESC
+       LIMIT ?`,
+    [limit]
+  )
+  return result.rows ?? result
+}
+
 // Population: matching chunks first (HNSW-efficient), then resolve to passports.
 export async function populationChunks({ embedding, similarity = 0.75, limit = 1000 }) {
   const v = toVectorLiteral(embedding)

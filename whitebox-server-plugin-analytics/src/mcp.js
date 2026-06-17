@@ -29,6 +29,20 @@ export function registerMcp(ctx, { awareness, context }) {
   })
 
   ctx.mcp.tool({
+    name: 'whitebox.ask_population',
+    description: 'Answer a natural-language question about the WHOLE customer base (or a semantic cohort within it) — not one customer, so no passport_id. Grounds the answer in content matching the question across all passports, weighted by how many distinct customers each piece reached, plus the cohort size. Use for "what are customers asking about?", "how many people heard about X?", "what is the most common objection?". For a single customer, use whitebox.ask instead.',
+    inputSchema: {
+      question:   z.string().min(1),
+      similarity: z.number().min(0).max(1).optional(),
+      limit:      z.number().int().positive().max(10000).optional(),
+    },
+    handler: async (args) => {
+      const result = await awareness.askPopulation(args)
+      return { content: [{ type: 'text', text: result.answer }] }
+    },
+  })
+
+  ctx.mcp.tool({
     name: 'whitebox.recall',
     description: 'Per-passport semantic search. Returns the top-K content chunks (mail bodies, web reads, call transcripts, CRM notes) most relevant to a query, ranked by vector similarity. Each hit includes channel, direction, timestamp, and UTM attribution when available.',
     inputSchema: {

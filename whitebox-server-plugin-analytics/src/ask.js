@@ -24,3 +24,24 @@ export function createAskHandler({ awareness, logger }) {
     }
   }
 }
+
+// Population scope: no passport_id — a grounded answer about the whole customer
+// base (or a semantic cohort within it). Delegates to awareness.askPopulation.
+export const askPopulationSchema = z.object({
+  question:    z.string().min(1),
+  similarity:  z.number().min(0).max(1).optional(),
+  limit:       z.number().int().positive().max(10000).optional(),
+})
+
+export function createAskPopulationHandler({ awareness, logger }) {
+  return async function askPopulation(req, res) {
+    const parsed = askPopulationSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
+    try {
+      res.json(await awareness.askPopulation(parsed.data))
+    } catch (err) {
+      logger.error({ err }, 'ask-population failed')
+      res.status(500).json({ error: 'ask-population failed' })
+    }
+  }
+}

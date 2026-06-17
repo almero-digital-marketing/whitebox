@@ -14,11 +14,12 @@ function makeMcpStub() {
 function makeDeps({ recallHits = [], population = { count: 0, passports: [] }, timeline = [], forgot = 0, answer = 'a', collected = {} } = {}) {
   return {
     awareness: {
-      recall:     vi.fn(async () => recallHits),
-      population: vi.fn(async () => population),
-      timeline:   vi.fn(async () => timeline),
-      forget:     vi.fn(async () => forgot),
-      ask:        vi.fn(async () => ({ answer, evidence: recallHits, context: collected })),
+      recall:        vi.fn(async () => recallHits),
+      population:    vi.fn(async () => population),
+      timeline:      vi.fn(async () => timeline),
+      forget:        vi.fn(async () => forgot),
+      ask:           vi.fn(async () => ({ answer, evidence: recallHits, context: collected })),
+      askPopulation: vi.fn(async () => ({ answer, evidence: [], cohort: { count: population.count } })),
     },
     context: {
       collect: vi.fn(async () => collected),
@@ -30,17 +31,34 @@ function makeDeps({ recallHits = [], population = { count: 0, passports: [] }, t
 const PID = 'a1b2c3d4-5678-4abc-89de-1234567890ab'
 
 describe('analytics plugin — MCP registration', () => {
-  it('registers six whitebox.* tools', () => {
+  it('registers seven whitebox.* tools', () => {
     const mcp = makeMcpStub()
     registerMcp({ mcp }, makeDeps())
     expect([...mcp.tools.keys()].sort()).toEqual([
       'whitebox.ask',
+      'whitebox.ask_population',
       'whitebox.context',
       'whitebox.forget',
       'whitebox.population',
       'whitebox.recall',
       'whitebox.timeline',
     ])
+  })
+
+  it('whitebox.ask_population delegates to awareness.askPopulation (no passport) and returns its answer text', async () => {
+    const mcp = makeMcpStub()
+    const deps = makeDeps({ answer: 'Most customers ask about pricing and SSO.', population: { count: 42, passports: [] } })
+    registerMcp({ mcp }, deps)
+
+    const result = await mcp.tools.get('whitebox.ask_population').handler({
+      question: 'What are customers asking about?',
+      similarity: 0.6,
+    })
+    expect(deps.awareness.askPopulation).toHaveBeenCalledWith(expect.objectContaining({
+      question: 'What are customers asking about?',
+      similarity: 0.6,
+    }))
+    expect(result.content[0].text).toContain('pricing and SSO')
   })
 
   it('whitebox.ask delegates to awareness.ask and returns its answer text', async () => {

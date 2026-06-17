@@ -12,6 +12,7 @@ function makeApp({ awarenessOverrides = {}, context = null } = {}) {
     forget: vi.fn(async () => 5),
     // synthesis lives in the awareness core now; the plugin just delegates
     ask: vi.fn(async () => ({ answer: 'Synthesized answer with citations.', evidence: [{ id: 1 }], context: {} })),
+    askPopulation: vi.fn(async () => ({ answer: 'Across the base, customers care about pricing.', evidence: [{ chunk_text: 'pricing', passport_count: 12 }], cohort: { count: 12 } })),
     ...awarenessOverrides,
   }
   const app = express()
@@ -382,6 +383,52 @@ describe('analytics.ask', () => {
     const { status } = await request(app, 'POST', '/analytics/ask', {
       auth: SECRET,
       body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'x' },
+    })
+    expect(status).toBe(500)
+  })
+})
+
+describe('analytics.ask-population', () => {
+
+  it('requires auth', async () => {
+    const { app } = makeApp()
+    const { status } = await request(app, 'POST', '/analytics/ask-population', {
+      body: { question: 'What do customers care about?' },
+    })
+    expect(status).toBe(401)
+  })
+
+  it('returns 400 on missing question', async () => {
+    const { app } = makeApp()
+    const { status } = await request(app, 'POST', '/analytics/ask-population', {
+      auth: SECRET,
+      body: { similarity: 0.7 },
+    })
+    expect(status).toBe(400)
+  })
+
+  it('delegates to awareness.askPopulation (no passport_id) and returns its result', async () => {
+    const result = { answer: 'Customers care about SSO.', evidence: [{ chunk_text: 'SSO', passport_count: 9 }], cohort: { count: 9 } }
+    const { app, awareness } = makeApp({ awarenessOverrides: { askPopulation: vi.fn(async () => result) } })
+
+    const { status, body } = await request(app, 'POST', '/analytics/ask-population', {
+      auth: SECRET,
+      body: { question: 'What do customers care about?', similarity: 0.65 },
+    })
+
+    expect(status).toBe(200)
+    expect(body).toEqual(result)
+    expect(awareness.askPopulation).toHaveBeenCalledWith(expect.objectContaining({
+      question: 'What do customers care about?',
+      similarity: 0.65,
+    }))
+  })
+
+  it('returns 500 when awareness.askPopulation throws', async () => {
+    const { app } = makeApp({ awarenessOverrides: { askPopulation: vi.fn(async () => { throw new Error('down') }) } })
+    const { status } = await request(app, 'POST', '/analytics/ask-population', {
+      auth: SECRET,
+      body: { question: 'x' },
     })
     expect(status).toBe(500)
   })

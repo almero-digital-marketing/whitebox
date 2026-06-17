@@ -16,6 +16,7 @@ Awareness itself has **no public surface** by design. Analytics is the only way 
 
 - **A grounded Q&A endpoint over the whole customer.** `POST /analytics/ask` returns an LLM answer that combines semantic recall from every channel (mail bodies, call transcripts, watched video segments, web reading, CRM notes) with current-state structured context (active subscription, upcoming reservation), and cites timestamps + UTM attribution from the evidence.
 - **Cohort awareness in one call.** `POST /analytics/population` returns "how many distinct customers have seen / said anything matching this concept" with a similarity threshold — the analytics equivalent of "how big is the segment that knows X".
+- **A grounded Q&A endpoint over the whole base.** `POST /analytics/ask-population` is the cohort sibling of `/ask`: no passport, it answers population-level questions ("what are customers asking about?", "how big is the cohort that's seen X?") grounded in content from across every passport, weighted by how many customers each piece reached.
 - **Per-customer semantic search.** `POST /analytics/recall` returns the top-k chunks from one customer's history scoped by query embedding.
 - **A debug surface for the context registry.** `GET /analytics/context/:passport_id` shows exactly what each registered plugin is feeding into `/ask`, with `?provider=` filtering and paging — useful for verifying a new integration before it changes LLM answers.
 - **GDPR forget in one call.** `DELETE /analytics/passport/:id` cascades through all channels' awareness footprint.
@@ -234,6 +235,59 @@ The system prompt enforces:
 - Don't invent attribution when UTMs are absent
 - Distinguish exposure vs expression
 - Stay concise
+
+### `POST /analytics/ask-population` — LLM-synthesized answer over the whole base
+
+> "Answer a natural-language question about the entire customer base, not one customer."
+
+The cohort sibling of `/ask`. Where `/ask` grounds a single passport's recall, `ask-population` answers about the base as a whole. **No `passport_id`.** It grounds on two things:
+
+1. **Base-wide stats** (always) — total customers and a breakdown of content events by channel/direction. This makes counting/aggregate questions ("how many customers do we have?") exact.
+2. **Evidence** — *either* the semantic cohort that matches the question (collapsed into representative content weighted by how many distinct customers it reached), *or*, when the question maps to no cohort (a broad/overview question), a query-independent **base-wide content sample** (biased toward what customers *express*, not just what we broadcast).
+
+So it works for both *targeted* questions ("what do customers who asked about pricing want?") and *whole-base* questions ("what are people interested in?", "what's going on across everyone?") — the latter no longer dead-ends on an empty cohort.
+
+Request:
+```json
+{
+  "question": "What are customers most interested in right now?",
+  "similarity": 0.6,
+  "limit": 1000
+}
+```
+
+Response:
+```json
+{
+  "answer": "Pricing and SSO dominate: dozens of customers asked about per-seat pricing, and a recurring theme among enterprise visitors is SAML/SSO. Refund terms come up far less often.",
+  "cohort": { "count": 137 },
+  "stats": {
+    "customers": 4120,
+    "exposures": 38117,
+    "breakdown": [
+      { "channel": "web", "direction": "exposure", "exposures": 21044, "customers": 4001 },
+      { "channel": "mail", "direction": "expression", "exposures": 980, "customers": 612 }
+    ]
+  },
+  "evidence": [
+    {
+      "chunk_text": "How is pricing structured for larger teams?",
+      "channel": "mail",
+      "direction": "expression",
+      "similarity": 0.88,
+      "passport_count": 41
+    }
+  ]
+}
+```
+
+- `stats` — base-wide totals + channel/direction breakdown, always present. Use it for "how many" questions.
+- `cohort.count` — distinct customers whose content matched the question (the semantic cohort, not the whole base). `0` means nothing matched the specific concept; the answer is then drawn from the base-wide sample (and `evidence[].similarity` is `null`).
+- `evidence[].passport_count` — how many distinct customers that content reached; the model uses this to ground magnitude.
+- Parameters: `similarity` (default `0.6` — looser than raw `population` so thematic questions have evidence to work with), `limit` (max chunks scanned, default 1000).
+- Only short-circuits (no LLM call) when the base is genuinely empty: `{ answer: "There are no customers in the base yet.", cohort: { count: 0 }, stats, evidence: [] }`.
+
+Like `/ask`, it delegates to the awareness core (`awareness.askPopulation`) and accepts the same `instruction` / `schema` overrides from there. There is **no** per-customer structured-context step — the context registry is per-passport.
 
 ### Context providers (how other plugins feed `/ask`)
 

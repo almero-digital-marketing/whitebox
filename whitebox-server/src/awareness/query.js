@@ -32,3 +32,14 @@ export async function population({ query, similarity = 0.75, limit = 1000 }) {
     passports: [...byPassport.values()],
   }
 }
+
+// Base-wide aggregates + a query-independent content sample. These ground
+// population-scope synthesis for overview/aggregate questions ("how many
+// customers", "what are people interested in") that map to no semantic cohort.
+export async function populationStats() {
+  return store.populationStats()
+}
+
+export async function sampleContent(args = {}) {
+  return store.sampleContent(args)
+}

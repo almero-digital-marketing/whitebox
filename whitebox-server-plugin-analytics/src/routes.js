@@ -1,9 +1,10 @@
 // HTTP routes for the analytics plugin. All auth-gated, read-mostly.
-// Six endpoints: recall, population, timeline, context (debug), forget, ask.
+// Seven endpoints: recall, population, timeline, context (debug), forget, ask,
+// ask-population.
 
 import express from 'express'
 import { z } from 'zod'
-import { createAskHandler } from './ask.js'
+import { createAskHandler, createAskPopulationHandler } from './ask.js'
 
 const recallSchema = z.object({
   passport_id: z.string().uuid(),
@@ -122,8 +123,10 @@ export function mountRoutes(app, { requireAuth, awareness, context, logger }) {
   })
 
   // /ask lives in ask.js because the system prompt + formatting helpers are
-  // a substantial concern on their own.
+  // a substantial concern on their own. /ask-population is its cohort sibling —
+  // a grounded answer about the whole customer base (no passport_id).
   router.post('/ask', requireAuth, createAskHandler({ awareness, logger }))
+  router.post('/ask-population', requireAuth, createAskPopulationHandler({ awareness, logger }))
 
   app.use('/analytics', router)
 }

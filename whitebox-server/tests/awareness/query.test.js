@@ -9,6 +9,8 @@ vi.mock('../../src/awareness/store.js', () => ({
   init: vi.fn(),
   recallChunks: vi.fn(),
   populationChunks: vi.fn(),
+  populationStats: vi.fn(),
+  sampleContent: vi.fn(),
 }))
 
 function makeQuery({ recallResult, populationResult, embedding } = {}) {
@@ -70,5 +72,22 @@ describe('awareness.query', () => {
       similarity: 0.9,
       limit: 50,
     })
+  })
+
+  it('populationStats delegates to the store (no embedding)', async () => {
+    const { query, store, ai } = makeQuery()
+    store.populationStats.mockResolvedValue({ customers: 7, exposures: 30, breakdown: [] })
+    const stats = await query.populationStats()
+    expect(store.populationStats).toHaveBeenCalled()
+    expect(ai.embed).not.toHaveBeenCalled()
+    expect(stats.customers).toBe(7)
+  })
+
+  it('sampleContent forwards args to the store', async () => {
+    const { query, store } = makeQuery()
+    store.sampleContent.mockResolvedValue([{ chunk_text: 'x', customers: 3 }])
+    const rows = await query.sampleContent({ limit: 20 })
+    expect(store.sampleContent).toHaveBeenCalledWith({ limit: 20 })
+    expect(rows).toHaveLength(1)
   })
 })
