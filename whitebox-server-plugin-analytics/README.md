@@ -236,6 +236,7 @@ The system prompt enforces:
 - Mention UTM attribution when relevant
 - Don't invent attribution when UTMs are absent
 - Distinguish exposure vs expression
+- Weight reading depth + intent — a skimmed heading or passively-viewed image (a "glance") is incidental, not a stated interest; lead with what the customer genuinely read or actively did
 - Stay concise
 
 ### `POST /analytics/ask-population` — LLM-synthesized answer over the whole base

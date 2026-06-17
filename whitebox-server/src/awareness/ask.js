@@ -37,8 +37,8 @@ export const ASK_SYSTEM_PROMPT = [
   '     This represents what is TRUE RIGHT NOW about the customer.',
   '  2. Evidence — semantically-recalled chunks of content the customer was exposed',
   '     to or expressed, tagged with timestamp, channel (mail/voip/web/crm),',
-  '     direction (exposure/expression/conversation/observation), and — when',
-  '     available — UTM attribution showing how they arrived.',
+  '     direction (exposure/expression/conversation/observation), reading depth for',
+  '     web reads (glance/read/deep), and — when available — UTM attribution.',
   '     This represents WHAT WE HAVE SEEN over time.',
   '',
   'Rules:',
@@ -49,6 +49,8 @@ export const ASK_SYSTEM_PROMPT = [
   '- Mention UTM attribution when it is relevant to the question.',
   '- If UTMs are absent for an exposure, do not invent attribution. Some content arrives without campaign attribution; that is normal.',
   '- Distinguish "exposure" (we showed/sent it) from "expression" (the user said/wrote it) from "observation" (an external system told us).',
+  '- Weight by reading depth and intent. A "glance" (a skimmed heading or brief look) or a passively-viewed image is weak, incidental signal — do NOT present it as a stated interest. Treat genuine reads ("read"/"deep") and active signals (expressions, conversations, observations — they asked, called, clicked, or a system recorded it) as what the customer actually cares about. Scrolling past content on a page is exposure, not interest.',
+  '- When asked what a customer is interested in, lead with what they genuinely engaged with; mention skimmed/glanced topics only as incidental ("briefly glanced at…"), if at all.',
   '- If neither context supports a clear answer, say so plainly.',
   '- Be concise. No preamble. No "Based on the evidence...".',
 ].join('\n')
@@ -82,7 +84,11 @@ export function formatHitsAsEvidence(hits) {
     const ts = h.ts instanceof Date ? h.ts.toISOString() : h.ts
     const channel = h.channel || '?'
     const direction = h.direction || '?'
-    return `[${ts}] ${channel}/${direction}${attribution}\n${h.chunk_text}`
+    // Reading depth (web text only): a 'glance' is a skimmed heading/brief look,
+    // weak signal; 'read'/'deep' is genuine engagement. Surfaced so the model
+    // doesn't read interest into something the customer barely skimmed.
+    const depth = h.depth ? ` (${h.depth})` : ''
+    return `[${ts}] ${channel}/${direction}${depth}${attribution}\n${h.chunk_text}`
   }).join('\n---\n')
 }
 
