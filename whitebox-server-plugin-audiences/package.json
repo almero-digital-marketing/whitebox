@@ -1,0 +1,29 @@
+{
+  "name": "whitebox-server-plugin-audiences",
+  "version": "0.1.0",
+  "description": "WhiteBox server — AI audience plugin. Builds ad-network audiences by reasoning over per-passport awareness against declarative rules, and reports custom events (Mode A) to Meta, TikTok and Google (GA4).",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "docs",
+    "whitebox.config.example.js",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.4.0"
+  },
+  "peerDependencies": {
+    "whitebox-server": "^2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0"
+  }
+}
