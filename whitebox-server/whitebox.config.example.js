@@ -89,7 +89,7 @@ export default {
   voip: {
     country: 'BG',
     url: 'https://example.com',
-    recordsFolder: '/var/whitebox/voip/records',
+    recordsFolder: 'var/voip/records',   // relative to the server's working dir (absolute paths also work)
     context: './context/speech.md',
     transcription: false,
     language: 'bg-BG',

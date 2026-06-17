@@ -4,3 +4,4 @@ whitebox.config.js
 .env.*
 !.env.example
 *.log
+var/          # runtime data (default voip recordsFolder, etc.)

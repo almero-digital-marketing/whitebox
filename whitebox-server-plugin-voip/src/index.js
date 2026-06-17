@@ -31,10 +31,16 @@ export default {
     const voipConfig = config.voip
     const logger = ctx.logger.child({ plugin: 'voip' })
 
+    // Resolve relative to the server's working dir (like `context` below), with a
+    // local default — so recordings land under the running server, not an absolute
+    // path like /var that may not be writable. An absolute config value is kept as-is.
+    const recordsFolder = path.resolve(process.cwd(), voipConfig.recordsFolder || 'var/voip/records')
+    voipConfig.recordsFolder = recordsFolder   // normalize once so encoder/speech/ari read the resolved path too
+
     // Best-effort: recordings only exist with a PBX, so don't let a non-writable
     // path stop the plugin from loading (call-tracking numbers don't need it).
-    await mkdir(voipConfig.recordsFolder, { recursive: true })
-      .catch(err => logger.warn({ err, recordsFolder: voipConfig.recordsFolder }, 'VoIP: could not create recordsFolder'))
+    await mkdir(recordsFolder, { recursive: true })
+      .catch(err => logger.warn({ err, recordsFolder }, 'VoIP: could not create recordsFolder'))
 
     const { notify } = createNotify({ webhooksConfig: voipConfig.webhooks, events, webhooks })
 
@@ -64,7 +70,7 @@ export default {
       logger.info('VoIP: no PBX/ARI configured — call-tracking numbers active, live ingestion off')
     }
 
-    app.use('/voip/records', express.static(voipConfig.recordsFolder))
+    app.use('/voip/records', express.static(recordsFolder))
 
     // Inbound-call ingestion WITHOUT a PBX: a telephony provider (or the demo's
     // "simulate call") POSTs a completed call here. We resolve the dialed
