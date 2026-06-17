@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acme Cloud · WhiteBox integration</title>
+<style>
+  :root { --fg:#1c2530; --mut:#6b7785; --line:#e4e8ee; --accent:#2f9e95; --bg:#fafbfc; --brand:#3b5bdb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif; color:var(--fg); background:var(--bg); }
+  header { position:sticky; top:0; z-index:5; display:flex; gap:1rem; align-items:center;
+           padding:.7rem 1.2rem; background:#fff; border-bottom:1px solid var(--line); }
+  header .logo { font-weight:800; color:var(--brand); }
+  header .sp { flex:1; }
+  .pill { font:12px/1 ui-monospace,monospace; padding:.35rem .55rem; border-radius:999px; background:#eef2f5; color:var(--mut); }
+  #status.ok { color:#0a7d52; background:#e3f6ec; }
+  .pill.on { color:#0a7d52; background:#e3f6ec; } .pill.off { color:#b06b00; background:#fbf0dd; }
+  .layout { display:grid; grid-template-columns: 1fr 380px; gap:0; }
+  main { max-width:680px; margin:0 auto; padding:2rem 1.5rem 4rem; }
+  section { margin:0 0 2.5rem; }
+  .eyebrow { text-transform:uppercase; letter-spacing:.08em; font-size:.72rem; color:var(--mut); font-weight:700; }
+  h1 { font-size:2rem; margin:.3rem 0 1rem; } h2 { font-size:1.3rem; margin:0 0 .6rem; }
+  p { margin:0 0 1rem; } .hint { color:var(--mut); font-size:.9rem; }
+  img { width:100%; border-radius:10px; border:1px solid var(--line); display:block; margin:1.2rem 0; }
+  [data-wb-read="1"] { box-shadow:-3px 0 0 0 var(--accent); padding-left:.6rem; margin-left:-.6rem; transition:box-shadow .2s; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:1.1rem 1.2rem; background:#fff; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin-top:.8rem; }
+  .act { display:flex; flex-direction:column; align-items:flex-start; gap:.2rem; text-align:left; cursor:pointer;
+         border:1px solid var(--line); background:#f6f8fa; border-radius:10px; padding:.7rem .8rem; font:inherit; color:inherit; }
+  .act:hover { background:#eef2f5; border-color:#cdd5dd; }
+  .act b { font-size:.92rem; } .act span { font-size:.78rem; color:var(--mut); }
+  .upgrade { background:var(--brand); color:#fff; border-color:var(--brand); } .upgrade:hover { background:#314fc4; }
+  .upgrade span { color:#cdd8ff; }
+  aside { position:sticky; top:49px; height:calc(100vh - 49px); border-left:1px solid var(--line);
+          background:#fff; display:flex; flex-direction:column; }
+  .bar { display:flex; gap:.5rem; padding:.6rem .8rem; border-bottom:1px solid var(--line); align-items:center; }
+  .bar h3 { margin:0; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--mut); flex:1; }
+  .bar button { font:12px sans-serif; padding:.3rem .6rem; border:1px solid var(--line); background:#f6f8fa; border-radius:6px; cursor:pointer; }
+  #log { overflow:auto; padding:.4rem .6rem; font:12px/1.5 ui-monospace,monospace; }
+  #log .row { padding:.25rem 0; border-bottom:1px dashed #eef1f4; word-break:break-word; }
+  #log .t { color:#9aa6b2; } #log .caret { display:inline-block; width:.8em; color:#b3bcc6; }
+  #log .k { display:inline-block; min-width:54px; font-weight:700; }
+  #log .text .k,#log .image .k,#log .video .k { color:#2f6fed; }
+  #log .crm .k { color:#7048e8; } #log .consent .k { color:#0a7d52; } #log .session .k,#log .ready .k { color:#0a7d52; }
+  #log .warn .k,#log .error .k { color:#c0392b; }
+  #log .row:has(.detail) .head { cursor:pointer; }
+  #log .detail { display:none; margin:.3rem 0 .4rem 1.4rem; padding:.5rem .6rem; background:#f6f8fa; border-radius:6px; white-space:pre-wrap; color:#3a4754; max-height:300px; overflow:auto; }
+  #log .row.open .detail { display:block; }
+  #consent { position:fixed; bottom:1rem; left:1rem; right:400px; z-index:10; display:flex; gap:.8rem; align-items:center;
+             background:#1c2530; color:#fff; border-radius:12px; padding:.8rem 1rem; font-size:.9rem; }
+  #consent.hide { display:none; } #consent .sp { flex:1; }
+  #consent button { font:inherit; padding:.45rem .8rem; border-radius:8px; border:0; cursor:pointer; }
+  #consent .accept { background:var(--accent); color:#fff; } #consent .reject { background:#3a4754; color:#cdd5dd; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">▲ Acme Cloud</span> <span class="hint">WhiteBox integration demo</span>
+  <span class="sp"></span>
+  <span class="pill">status: <span id="status">connecting…</span></span>
+  <span class="pill" id="consent-pill">consent: none</span>
+  <span class="pill">passport: <span id="passport">…</span></span>
+</header>
+
+<div class="layout">
+  <main>
+    <!-- Public marketing page → engagement (reading) tracking -->
+    <section>
+      <div class="eyebrow">Pricing</div>
+      <h1 data-wb-text="hero">Ship faster, on infrastructure you don't babysit.</h1>
+      <p class="hint" data-wb-text="sub">Scroll and pause on the copy below — the engagement plugin records which paragraphs you actually read (green marker + a <b>text</b> row on the right), exactly as on a real marketing page.</p>
+
+      <h2 data-wb-text="h-why">Why teams switch</h2>
+      <p data-wb-text="why-1">Acme Cloud runs your services across regions with zero-config failover. You describe intent; we handle capacity, rollout, and rollback. Teams cut their on-call load by reading this paragraph and believing it.</p>
+      <p data-wb-text="why-2">Pricing is usage-based with a generous free tier. The refund clause — the paragraph people read twice before they trust a vendor — is plain: cancel any time, prorated to the day, no retention games.</p>
+
+      <img data-wb-image="arch-diagram" alt="Architecture diagram: edge → regional autoscalers → managed datastores"
+           src="data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='680' height='240'&gt;&lt;rect width='100%25' height='100%25' fill='%23eef2ff'/&gt;&lt;text x='50%25' y='50%25' font-family='sans-serif' font-size='22' fill='%233b5bdb' text-anchor='middle'&gt;architecture&lt;/text&gt;&lt;/svg&gt;">
+
+      <p data-wb-text="why-3">Dwell on the diagram above and it logs an <b>image</b> read. Everything here flows to the same per-customer memory as the in-app events below — one timeline across marketing and product.</p>
+    </section>
+
+    <!-- In-app dashboard → CRM client observations -->
+    <section>
+      <div class="eyebrow">Your workspace</div>
+      <h2>Simulate product usage</h2>
+      <p class="hint">These buttons fire <b>client observations</b> (<code>wb.crm.observe</code>) — low-trust facts about what you did in the app. They need <b>marketing consent</b> (accept below), and they're recorded as <code>source:'client'</code> evidence, not authoritative state.</p>
+      <div class="card">
+        <div class="grid">
+          <button class="act" data-crm-kind="onboarding_step" data-crm-body="Completed onboarding: connected first repo"><b>Finish onboarding</b><span>onboarding_step</span></button>
+          <button class="act" data-crm-kind="project_created" data-crm-body="Created first project 'api-gateway'"><b>Create project</b><span>project_created</span></button>
+          <button class="act" data-crm-kind="invite_sent" data-crm-body="Invited a teammate"><b>Invite teammate</b><span>invite_sent</span></button>
+          <button class="act" data-crm-kind="feature_used" data-crm-body="Enabled multi-region failover"><b>Enable failover</b><span>feature_used</span></button>
+          <button class="act" data-crm-kind="docs_viewed" data-crm-body="Opened the billing docs"><b>Open billing docs</b><span>docs_viewed</span></button>
+          <button class="act upgrade" data-crm-kind="upgrade_intent" data-crm-body="Clicked Upgrade to Team plan"><b>Upgrade to Team</b><span>upgrade_intent</span></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <aside>
+    <div class="bar">
+      <h3>live events</h3>
+      <button id="flush" title="Force-flush buffered events">flush</button>
+      <button id="copy" title="Copy passport id">copy id</button>
+    </div>
+    <div id="log"></div>
+  </aside>
+</div>
+
+<div id="consent">
+  <span>Acme Cloud uses analytics &amp; marketing tracking. Engagement reading is always on in this demo; product events need consent.</span>
+  <span class="sp"></span>
+  <button class="reject" id="consent-reject">Reject</button>
+  <button class="accept" id="consent-accept">Accept all</button>
+</div>
+
+<!-- Classic diagnostics: surfaces a bare-specifier error if not served via serve.mjs -->
+<script>
+(function () {
+  function row(kind, msg) { var el=document.getElementById('log'); if(!el)return;
+    var r=document.createElement('div'); r.className='row '+kind;
+    r.innerHTML='<span class="t">'+new Date().toLocaleTimeString()+'</span> <span class="k">'+kind+'</span> <span class="d"></span>';
+    r.querySelector('.d').textContent=msg; el.prepend(r) }
+  addEventListener('error', function (e) {
+    var m=e.message||(e.error&&e.error.message)||String(e);
+    var s=document.getElementById('status'); if(s){s.textContent='error';s.className=''}
+    row('error', m);
+    if (/resolve module specifier|Failed to fetch dynamically/i.test(m))
+      row('warn', 'SDK bundle did not load. Serve with `node serve.mjs` and open the URL it prints.')
+  })
+})()
+</script>
+<script type="module" src="/main.js"></script>
+</body>
+</html>
