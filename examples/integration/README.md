@@ -9,6 +9,7 @@ What it exercises today:
 | **core** | session/passport resolution, socket transport, `consent` | header pills + the consent banner |
 | **`whitebox-client-plugin-engagement`** | reading / image-dwell tracking | the marketing/pricing copy at the top |
 | **`whitebox-client-plugin-crm`** | client observations of in-app usage | the "Simulate product usage" buttons |
+| **`whitebox-client-plugin-voip`** | per-visitor call-tracking number (DNI) | the "Talk to sales" card + request form |
 
 One passport, one timeline — marketing reads and in-app product events land in the **same per-customer memory**.
 
@@ -22,7 +23,7 @@ One passport, one timeline — marketing reads and in-app product events land in
 2. **Redis running** and `whitebox-server/.env` filled in (copy `.env.example`).
 3. The server config (`whitebox-server/whitebox.config.js`) must load the plugins this demo uses, and the `crm` plugin needs an auth token (it won't register without one):
    ```js
-   plugins: ['engagement', 'crm', 'analytics'],
+   plugins: ['engagement', 'crm', 'analytics', 'voip'],
    crm: { auth: { secret: process.env.WB_CRM_TOKEN } },   // set WB_CRM_TOKEN in .env
    ```
 

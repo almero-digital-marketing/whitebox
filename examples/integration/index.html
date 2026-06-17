@@ -96,6 +96,32 @@
         </div>
       </div>
     </section>
+
+    <!-- Call tracking (voip) → a per-visitor company number; the call attributes to the passport -->
+    <section>
+      <div class="eyebrow">Talk to sales</div>
+      <h2>Prefer to call?</h2>
+      <p class="hint">This number is assigned to <em>you</em> for the session (dynamic number insertion). Call it and the conversation attributes to your passport — no customer phone is captured. Without a PBX, hit "Simulate inbound call" to record a transcript.</p>
+      <div class="card">
+        <p style="font-size:1.05rem">Call us: <a data-wb-phone="demo" href="tel:+15555550100" style="font-weight:800;color:var(--brand);text-decoration:none">reveal number…</a></p>
+        <button class="act" id="sim-call" style="margin-top:.6rem"><b>Simulate inbound call</b><span>POST /voip/calls → voip exposure</span></button>
+      </div>
+    </section>
+
+    <!-- Request a callback → a crm observation (consent-gated) -->
+    <section>
+      <div class="eyebrow">Contact</div>
+      <h2>Request a callback</h2>
+      <form id="req-form" class="card" style="display:grid; gap:.6rem">
+        <input name="name" placeholder="Your name" required
+               style="padding:.55rem .7rem; border:1px solid var(--line); border-radius:8px; font:inherit">
+        <input name="email" type="email" placeholder="Work email"
+               style="padding:.55rem .7rem; border:1px solid var(--line); border-radius:8px; font:inherit">
+        <textarea name="message" placeholder="What can we help with?" rows="2"
+               style="padding:.55rem .7rem; border:1px solid var(--line); border-radius:8px; font:inherit; resize:vertical"></textarea>
+        <button class="act upgrade" type="submit" style="align-items:center; text-align:center"><b>Request callback</b><span>callback_request</span></button>
+      </form>
+    </section>
   </main>
 
   <aside>

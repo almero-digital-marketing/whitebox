@@ -1,10 +1,22 @@
 import { parsePhoneNumber } from 'libphonenumber-js'
 
-// lines is a tag → number[] map, e.g. { sofia: ['+35921234567'], berlin: ['+49301234567'] }
+// Internally `lines` is a tag → number[] map, e.g. { sofia: ['+35921234567'] }.
 let lines, country
 
+// Config may provide `lines` as that map, OR as the richer array of line
+// objects [{ tag, prefix, in: [numbers], out, strategy }] — normalize both to
+// the { tag: number[] } map the pool/phonebook use (inbound `in` numbers).
+export function normalizeLines(raw) {
+  if (Array.isArray(raw)) {
+    const map = {}
+    for (const l of raw) if (l?.tag) map[l.tag] = l.in || []
+    return map
+  }
+  return raw || {}
+}
+
 export function init({ config }) {
-  lines = config.voip.lines
+  lines = normalizeLines(config.voip.lines)
   country = config.voip.country
 }
 

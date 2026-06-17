@@ -31,7 +31,10 @@ export default {
     const voipConfig = config.voip
     const logger = ctx.logger.child({ plugin: 'voip' })
 
+    // Best-effort: recordings only exist with a PBX, so don't let a non-writable
+    // path stop the plugin from loading (call-tracking numbers don't need it).
     await mkdir(voipConfig.recordsFolder, { recursive: true })
+      .catch(err => logger.warn({ err, recordsFolder: voipConfig.recordsFolder }, 'VoIP: could not create recordsFolder'))
 
     const { notify } = createNotify({ webhooksConfig: voipConfig.webhooks, events, webhooks })
 
@@ -62,6 +65,36 @@ export default {
     }
 
     app.use('/voip/records', express.static(voipConfig.recordsFolder))
+
+    // Inbound-call ingestion WITHOUT a PBX: a telephony provider (or the demo's
+    // "simulate call") POSTs a completed call here. We resolve the dialed
+    // company number to the visitor holding it and record a voip exposure — the
+    // same shape ARI produces. (With a PBX, ARI does this automatically.)
+    app.post('/voip/calls', async (req, res) => {
+      const { number, caller = null, transcription = '', duration = null, ts } = req.body || {}
+      if (!number) return res.status(400).json({ error: 'number is required' })
+      const holder = pool.findByNumber(number)
+      if (!holder?.passportId) return res.status(202).json({ reason: 'no_visitor_for_number' })
+      try {
+        await awareness.record({
+          passport_id: holder.passportId,
+          session_id:  holder.sessionId,
+          ts:          ts ? new Date(ts) : new Date(),
+          channel:     'voip',
+          direction:   'conversation',
+          source:      'call',
+          content_id:  `call:webhook:${number}:${ts || Date.now()}`,
+          text:        transcription || '(call connected, no transcript)',
+          dwell_ms:    duration ? duration * 1000 : null,
+          meta: { caller, line: number, tag: holder.tag, via: 'webhook' },
+        })
+        res.json({ passport_id: holder.passportId, recorded: true })
+      } catch (err) {
+        logger.error({ err }, 'voip call ingest failed')
+        res.status(500).json({ error: 'voip call ingest failed' })
+      }
+    })
+
     registerMcp(ctx, { db })
 
     logger.info('VoIP plugin ready')

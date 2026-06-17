@@ -2,6 +2,7 @@
 //   • core        — session/passport resolution, transport, consent
 //   • engagement  — reading / image-dwell tracking on the marketing page
 //   • crm         — client observations of in-app product usage
+//   • voip        — per-visitor call-tracking number (dynamic number insertion)
 //
 // Bundled by serve.mjs (esbuild) from the workspace packages. Add a new client
 // plugin here when one ships — wire it into `plugins`, surface it in the UI, and
@@ -10,6 +11,7 @@
 import whitebox from 'whitebox-client'
 import engagementPlugin from 'whitebox-client-plugin-engagement'
 import crmPlugin from 'whitebox-client-plugin-crm'
+import voipPlugin from 'whitebox-client-plugin-voip'
 
 const logEl = document.querySelector('#log')
 const statusEl = document.querySelector('#status')
@@ -57,6 +59,8 @@ const wb = whitebox({
     }),
     // In-app observations — gated on marketing consent (granted via the banner).
     crmPlugin({ consent: 'marketing', flushIntervalMs: 1500, batchSize: 3 }),
+    // Call tracking: assigns a per-visitor number to any [data-wb-phone] element.
+    voipPlugin(),
   ],
 })
 window.wb = wb
@@ -67,6 +71,8 @@ wb.on('transport:disconnected', d  => { setStatus('session ready · socket down'
 wb.on('engagement.text',  e => { log('text',  `read “${e.id}” (${e.length_chars}c, ${e.ms_spent}ms)`, e); markRead('data-wb-text', e.id) })
 wb.on('engagement.image', e => { log('image', `viewed ${e.id} (${e.ms_spent}ms)`, e); markRead('data-wb-image', e.id) })
 wb.on('engagement.video', e => log('video', `watched ${e.id} · ${e.completion_pct}%`, e))
+wb.on('voip.number', ({ tag, number, formatted }) => log('voip', `number assigned (${tag}): ${formatted || number}`, { tag, number, formatted }))
+wb.on('voip.click',  ({ tag, number }) => log('voip', `click-to-call ${number}`, { tag, number }))
 
 // ── consent banner → core consent ─────────────────────────────────────────
 const banner = document.querySelector('#consent')
@@ -95,6 +101,32 @@ document.querySelectorAll('[data-crm-kind]').forEach(btn => {
     wb.crm.observe({ kind, body })
     log('crm', `${kind} · ${body}`, { kind, body })
   })
+})
+
+// ── voip: simulate an inbound call (no PBX) ───────────────────────────────
+document.querySelector('#sim-call')?.addEventListener('click', async () => {
+  const link = document.querySelector('[data-wb-phone]')
+  const number = link?.getAttribute('data-wb-phone-assigned')
+  if (!number) { log('warn', 'reveal the sales number first (scroll the "Talk to sales" card into view)'); return }
+  const transcription = 'Customer: Hi, I read your pricing page and want to ask about the Team plan and the refund policy.\nAgent: Happy to help — Team is usage-based, and refunds are prorated to the day.'
+  try {
+    const r = await fetch('/voip/calls', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ number, caller: '+15551234567', transcription, duration: 95 }),
+    })
+    log('voip', `simulated inbound call → HTTP ${r.status}`, await r.json().catch(() => ({})))
+  } catch (e) { log('error', `simulate call failed: ${e.message}`) }
+})
+
+// ── request a callback → crm observation ──────────────────────────────────
+document.querySelector('#req-form')?.addEventListener('submit', (e) => {
+  e.preventDefault()
+  const fd = new FormData(e.target)
+  const name = fd.get('name'), email = fd.get('email'), message = fd.get('message')
+  if (!wb.consent.has('marketing')) { log('warn', 'callback request dropped — grant marketing consent first'); return }
+  wb.crm.observe({ kind: 'callback_request', body: `Requested a callback: ${message || '(no message)'}`, meta: { name, email } })
+  log('crm', `callback_request from ${name || 'visitor'}`, { name, email, message })
+  e.target.reset()
 })
 
 // ── ready ──────────────────────────────────────────────────────────────────
