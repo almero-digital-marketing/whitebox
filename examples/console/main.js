@@ -54,7 +54,7 @@ tokenEl.addEventListener('change', () => localStorage.setItem('wb.console.token'
 })()
 
 // ── rendering ────────────────────────────────────────────────────────────────
-function card({ kind, title, answer, stat, evidence, context, json, error }) {
+function card({ kind, title, answer, stat, evidence, evidenceLabel = 'evidence', evidenceOpen = false, context, json, raw, error }) {
   const div = document.createElement('div')
   const cls = error ? 'err' : (kind === 'ask' ? '' : (kind === 'all' ? 'all' : 'tool'))
   const head = document.createElement('div')
@@ -66,14 +66,14 @@ function card({ kind, title, answer, stat, evidence, context, json, error }) {
   if (stat) { const s = document.createElement('div'); s.className = 'stat'; s.textContent = stat; div.appendChild(s) }
   if (answer != null) { const a = document.createElement('div'); a.className = 'answer'; a.textContent = answer; div.appendChild(a) }
   if (Array.isArray(evidence) && evidence.length) {
-    const d = document.createElement('details')
-    d.innerHTML = `<summary>evidence (${evidence.length})</summary>`
+    const d = document.createElement('details'); d.open = evidenceOpen
+    d.innerHTML = `<summary>${evidenceLabel} (${evidence.length})</summary>`
     for (const h of evidence) {
       const e = document.createElement('div'); e.className = 'ev'
-      const ts = h.ts ? new Date(h.ts).toISOString().slice(0, 16).replace('T', ' ') : '?'
-      // population evidence carries a customer reach count; per-passport recall doesn't.
+      const when = h.ts ? `[${new Date(h.ts).toISOString().slice(0, 16).replace('T', ' ')}] ` : ''
+      // population/cohort items carry a customer reach count; per-passport recall doesn't.
       const seen = h.passport_count != null ? ` · ${h.passport_count} customer${h.passport_count === 1 ? '' : 's'}` : ''
-      e.innerHTML = `<div class="meta">[${ts}] ${h.channel || '?'}/${h.direction || '?'}${seen}</div>`
+      e.innerHTML = `<div class="meta">${when}${h.channel || '?'}/${h.direction || '?'}${seen}</div>`
       e.appendChild(document.createTextNode(h.chunk_text || ''))
       d.appendChild(e)
     }
@@ -84,6 +84,10 @@ function card({ kind, title, answer, stat, evidence, context, json, error }) {
     const pre = document.createElement('pre'); pre.textContent = JSON.stringify(context, null, 2); d.appendChild(pre); div.appendChild(d)
   }
   if (json !== undefined) { const pre = document.createElement('pre'); pre.textContent = JSON.stringify(json, null, 2); div.appendChild(pre) }
+  if (raw !== undefined) {
+    const d = document.createElement('details'); d.innerHTML = '<summary>raw JSON</summary>'
+    const pre = document.createElement('pre'); pre.textContent = JSON.stringify(raw, null, 2); d.appendChild(pre); div.appendChild(d)
+  }
   outEl.prepend(div)
   return div
 }
@@ -162,13 +166,37 @@ async function tool(name) {
 // channels (mail/voip/crm) have no depth signal and always qualify.
 const COHORT_SIMILARITY = 0.6
 const COHORT_MIN_ENGAGEMENT = 0.15
+// Collapse the raw {passports:[{hits}]} blob into the legible bit: one row per
+// distinct piece of content, with how many customers it reached — instead of a
+// wall of JSON. (Same shape as the All-customers ask evidence.)
+function summarizeCohort(json) {
+  const byChunk = new Map()
+  for (const p of json.passports || []) {
+    for (const h of p.hits || []) {
+      const key = h.chunk_text || ''; if (!key) continue
+      let g = byChunk.get(key)
+      if (!g) { g = { chunk_text: key, channel: h.channel, direction: h.direction, passports: new Set(), similarity: 0 }; byChunk.set(key, g) }
+      g.passports.add(p.passport_id)
+      if ((h.similarity || 0) > g.similarity) g.similarity = h.similarity || 0
+    }
+  }
+  return [...byChunk.values()]
+    .map(g => ({ chunk_text: g.chunk_text, channel: g.channel, direction: g.direction, passport_count: g.passports.size, similarity: g.similarity }))
+    .sort((a, b) => b.passport_count - a.passport_count || b.similarity - a.similarity)
+    .slice(0, 12)
+}
 async function cohort(concept) {
   const token = needToken(); if (!token) return
   const query = (concept || $('#cohortq').value.trim() || 'teeth whitening')
   try {
     const json = await authed('/analytics/population', { method: 'POST', body: { query, similarity: COHORT_SIMILARITY, min_engagement: COHORT_MIN_ENGAGEMENT } }, token)
     const n = json.count ?? 0
-    card({ kind: 'cohort', title: `cohort: "${query}"`, stat: `${n} customer${n === 1 ? '' : 's'} match (genuine reads)`, json })
+    card({
+      kind: 'cohort', title: `cohort: "${query}"`,
+      stat: `${n} customer${n === 1 ? '' : 's'} match (genuine reads)`,
+      evidence: summarizeCohort(json), evidenceLabel: 'matched content', evidenceOpen: true,
+      raw: json,
+    })
   } catch (e) { card({ kind: 'error', title: `cohort — ${e.message}`, error: true }) }
 }
 

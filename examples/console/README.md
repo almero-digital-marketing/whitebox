@@ -22,7 +22,7 @@ Answers from both tabs accumulate in the shared log below, each badged by scope.
 
 ## Use it
 
-1. **All customers** tab (no passport) — click a question chip to drop it into the box (it doesn't ask on its own — tweak it, then **Ask all** or Enter), or type your own; evidence rows show how many customers each chunk reached. Use the **cohort size** box (with one-click example concepts) for a raw match count.
+1. **All customers** tab (no passport) — click a question chip to drop it into the box (it doesn't ask on its own — tweak it, then **Ask all** or Enter), or type your own; evidence rows show how many customers each chunk reached. Use the **cohort size** box (with one-click example concepts) for a match count plus the content it matched on (one row per piece of content, with how many customers reached it; raw JSON is collapsed under the card).
 2. To go per-customer, open the integration demo, generate some activity for a visitor, and copy its **passport id**.
 3. Switch to the **This customer** tab and paste that id into its **passport** field.
 4. Click a question chip to prefill the box (then **Ask** or Enter), or type your own; expand **evidence** for the cited chunks. **Inspect** the raw memory with `Timeline`, `Context (CRM state)`, and `Recall` (with one-click example queries).
