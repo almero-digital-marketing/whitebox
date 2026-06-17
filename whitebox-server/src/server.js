@@ -1,3 +1,4 @@
+import './quiet-deprecations.js'   // drop the benign punycode (DEP0040) warning — must be first
 import http from 'http'
 import path from 'path'
 import { mkdir } from 'fs/promises'
