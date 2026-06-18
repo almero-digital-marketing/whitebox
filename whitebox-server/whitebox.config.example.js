@@ -50,13 +50,13 @@ export default {
     company: 'team@example.com',                         // forwarding destination for inbound + form submissions
 
     mailgun: {
-      apiKey: '',
+      apiKey: process.env.WB_MAILGUN_API_KEY,            // Mailgun sending/API key — set in .env, never here
       domain: 'mg.example.com',
-      webhookSigningKey: '',                             // shared with Mailgun webhook signing
+      webhookSigningKey: process.env.WB_MAILGUN_WEBHOOK_SIGNING_KEY,   // shared with Mailgun webhook signing
     },
 
     auth: {
-      secret: '',                                        // required Bearer token for POST /mail/inbox and /mail/outbox
+      secret: process.env.WB_MAIL_TOKEN,                 // required Bearer token for POST /mail/inbox and /mail/outbox
     },
 
     webhookReplayWindowMs: 5 * 60 * 1000,                // reject Mailgun signatures older than this
