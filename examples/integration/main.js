@@ -4,6 +4,7 @@
 //   • engagement  — reading / image-dwell tracking on the clinic website
 //   • crm         — client observations of patient-portal actions
 //   • voip        — per-visitor call-tracking number (dynamic number insertion)
+//   • conversions — standard events → ad-network pixels + server SST (deduped)
 //
 // Bundled by serve.mjs (esbuild) from the workspace packages. Add a new client
 // plugin here when one ships — wire it into `plugins`, surface it in the UI, and
@@ -13,6 +14,7 @@ import whitebox from 'whitebox-client'
 import engagementPlugin from 'whitebox-client-plugin-engagement'
 import crmPlugin from 'whitebox-client-plugin-crm'
 import voipPlugin from 'whitebox-client-plugin-voip'
+import conversionsPlugin from 'whitebox-client-plugin-conversions'
 
 const logEl = document.querySelector('#log')
 const statusEl = document.querySelector('#status')
@@ -62,6 +64,11 @@ const wb = whitebox({
     crmPlugin({ consent: 'marketing', flushIntervalMs: 1500, batchSize: 3 }),
     // Call tracking: assigns a per-visitor number to any [data-wb-phone] element.
     voipPlugin(),
+    // Standard conversion events → fires the ad-network pixels present on the
+    // page (Meta/TikTok/GA4) AND POSTs to /conversions/events, one shared
+    // event_id, gated on marketing consent. Networks fire wherever they're
+    // configured (browser pixel + server creds) — see the README.
+    conversionsPlugin(),
   ],
 })
 window.wb = wb
@@ -107,6 +114,27 @@ document.querySelectorAll('[data-crm-kind]').forEach(btn => {
     }
     wb.crm.observe({ kind, body })
     log('crm', `${kind} · ${body}`, { kind, body })
+  })
+})
+
+// ── conversions: standard events → ad-network pixels + server SST ──────────
+document.querySelectorAll('[data-conv]').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const method = btn.dataset.conv
+    let payload = {}
+    if (btn.dataset.convPayload) {
+      try { payload = JSON.parse(btn.dataset.convPayload) } catch { log('warn', `bad payload on ${method}`); return }
+    }
+    if (typeof wb.conversions?.[method] !== 'function') { log('warn', `conversions.${method} unavailable`); return }
+    try {
+      const res = await wb.conversions[method](payload)
+      if (res?.skipped) {
+        log('warn', `conversion "${method}" skipped (${res.skipped}) — grant marketing consent first`)
+      } else {
+        const pixels = res?.pixels?.length ? `pixels: ${res.pixels.join(', ')}` : 'no pixels on page'
+        log('conversion', `${method} · ${pixels}`, { method, payload, ...res })
+      }
+    } catch (e) { log('error', `conversion ${method}: ${e.message}`) }
   })
 })
 

@@ -130,6 +130,26 @@
       </div>
     </section>
 
+    <!-- Conversions (standard events) → browser pixels (fbq/gtag/ttq) + server SST, deduped by event_id -->
+    <section>
+      <div class="eyebrow">Conversions</div>
+      <h2>Fire standard events</h2>
+      <p class="hint">Each button calls <code>wb.conversions.&lt;event&gt;(…)</code> — it fires the ad-network <b>pixels present on the page</b> (Meta/TikTok/GA4) <b>and</b> POSTs to <code>/conversions/events</code> under one shared <code>event_id</code> (so pixel ↔ server-side dedupe). Server-side fan-out (Meta CAPI / TikTok Events API) and the browser pixels both need credentials — see the <b>README</b> for the env vars. Requires <b>marketing consent</b>.</p>
+      <div class="card">
+        <div class="grid">
+          <button class="act" data-conv="viewContent" data-conv-payload='{"content_ids":["whitening"],"content_name":"Teeth whitening","content_category":"cosmetic","value":390,"currency":"USD"}'><b>View whitening</b><span>view_content</span></button>
+          <button class="act" data-conv="search" data-conv-payload='{"search_string":"invisalign cost"}'><b>Search services</b><span>search</span></button>
+          <button class="act" data-conv="lead" data-conv-payload='{"content_name":"Free consultation","content_category":"cosmetic"}'><b>Book consultation</b><span>lead</span></button>
+          <button class="act" data-conv="contact"><b>Contact clinic</b><span>contact</span></button>
+          <button class="act" data-conv="completeRegistration"><b>New-patient signup</b><span>complete_registration</span></button>
+          <button class="act" data-conv="subscribe"><b>Newsletter signup</b><span>subscribe</span></button>
+          <button class="act" data-conv="addToCart" data-conv-payload='{"content_ids":["whitening"],"value":390,"currency":"USD"}'><b>Add to plan</b><span>add_to_cart</span></button>
+          <button class="act" data-conv="beginCheckout" data-conv-payload='{"value":390,"currency":"USD","num_items":1}'><b>Start checkout</b><span>begin_checkout</span></button>
+          <button class="act upgrade" data-conv="purchase" data-conv-payload='{"value":390,"currency":"USD","content_ids":["whitening"],"num_items":1,"transaction_id":"INV-1001"}'><b>Pay for treatment</b><span>purchase</span></button>
+        </div>
+      </div>
+    </section>
+
     <!-- Call tracking (voip) → a per-visitor clinic number; the call attributes to the passport -->
     <section>
       <div class="eyebrow">Call the clinic</div>
