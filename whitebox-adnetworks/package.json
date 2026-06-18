@@ -5,7 +5,10 @@
   "type": "module",
   "main": "./src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./schemas": "./src/schemas.js",
+    "./taxonomy": "./src/taxonomy.js",
+    "./networks": "./src/networks.js"
   },
   "files": [
     "src",
@@ -14,6 +17,9 @@
   "sideEffects": false,
   "scripts": {
     "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "vitest": "^2.1.0"

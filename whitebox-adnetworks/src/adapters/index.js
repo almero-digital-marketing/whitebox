@@ -1,17 +1,14 @@
 import { createMeta } from './meta.js'
 import { createTiktok } from './tiktok.js'
 import { createGoogle } from './google.js'
+import { selectedNetworks } from '../networks.js'
 
 const FACTORIES = { meta: createMeta, tiktok: createTiktok, google: createGoogle }
 
-// Build the enabled, configured adapters from a networks config block.
-//   networks: { meta:{…}, tiktok:{…}, google:{…} }  (enabled:false to skip)
+// Build the configured adapters from a networks config block, using the SAME
+// selection logic the client uses to pick pixels (whitebox-adnetworks/networks),
+// so both sides share one vocabulary. (enabled:false or a falsy value ⇒ skip.)
+//   networks: { meta:{…}, tiktok:{…}, google:{…} }
 export function buildAdapters(networks = {}, deps = {}) {
-  const adapters = []
-  for (const [name, factory] of Object.entries(FACTORIES)) {
-    const cfg = networks[name]
-    if (!cfg || cfg.enabled === false) continue
-    adapters.push(factory(cfg, deps))
-  }
-  return adapters
+  return selectedNetworks(networks).map(name => FACTORIES[name](networks[name], deps))
 }

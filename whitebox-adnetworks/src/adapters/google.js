@@ -26,6 +26,9 @@ export function createGoogle(cfg, { logger } = {}) {
       if (canonical.value != null) params.value = canonical.value
       if (canonical.currency) params.currency = canonical.currency
       if (canonical.items) params.items = canonical.items
+      // GA4 dedupes duplicate purchase events sharing a transaction_id — this is
+      // what lets the server MP hit coexist with the client gtag purchase.
+      if (canonical.transaction_id) params.transaction_id = canonical.transaction_id
       const body = {
         client_id,
         ...(ids.external_id ? { user_id: ids.external_id } : {}),
