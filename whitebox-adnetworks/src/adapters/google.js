@@ -2,6 +2,7 @@
 // via taxonomy). Needs the GA4 client_id (the `_ga` cookie).
 
 import { resolveEventName } from '../taxonomy.js'
+import { SIGNAL_SPECS } from '../networks.js'
 
 const MP = 'https://www.google-analytics.com/mp/collect'
 
@@ -12,10 +13,7 @@ export function createGoogle(cfg, { logger } = {}) {
     modes: ['event'],
     eligible,
     transport: 'ga4',
-    identitySpec: [
-      { key: 'ga_client_id', from: 'cookie', name: '_ga', transform: 'ga_cid' },
-      { key: 'gclid', from: 'url', name: 'gclid' },
-    ],
+    identitySpec: SIGNAL_SPECS.google,
     acceptedKeys: ['ga_client_id', 'user_id', 'gclid'],
 
     async sendEvent(canonical, ids) {

@@ -11,13 +11,14 @@ import { validateEvent, validateCustom } from 'whitebox-adnetworks/schemas'
 
 import * as store from './store.js'
 
-let awareness, reporter, consentOk, logger
+let awareness, reporter, consentOk, logger, resolvePassport
 
 export function init(deps) {
   awareness = deps.awareness
   reporter  = deps.reporter
   consentOk = deps.consentOk            // async (passportId) => boolean
   logger    = deps.logger
+  resolvePassport = deps.resolvePassport // async (id) => survivor id (merge chain)
 }
 
 // A readable, embeddable one-liner so the conversion is queryable via recall
@@ -36,6 +37,11 @@ function describe(name, p) {
 //   raw: { standard|event, event_id?, ts?, url?, ...payload }
 // Returns { event_id, name, status: 'recorded'|'duplicate', networks }.
 export async function ingestEvent(passportId, raw = {}, reqCtx = {}) {
+  // Canonicalize the client-supplied passport through the merge chain (no session
+  // lookup — we still trust the id) so a stale/absorbed id maps to its survivor
+  // for the awareness record, audit row, and ad-network fan-out alike.
+  if (resolvePassport) passportId = await resolvePassport(passportId)
+
   const { standard, event: customName, ts, url, ...payloadIn } = raw
 
   // Validate against the right schema (unknown keys — standard/ts/url — are

@@ -1,9 +1,16 @@
-// Collect the browser ad-network signals the SERVER-side APIs need to match a
-// user — these only exist client-side, so we read them here and pass them in the
-// /conversions/events POST:
-//   • GA4 Measurement Protocol REQUIRES the _ga client_id (rejects without it)
-//   • Meta CAPI / TikTok Events API match better with the pixel cookies
-//     (_fbp/_fbc, _ttp/ttclid) and click ids.
+// Browser ad-signal collection — driven by the shared, declarative specs in
+// whitebox-adnetworks (the same `identitySpec`s the server adapters expose and
+// composeManifest() unions). NOT a hardcoded cookie list: add a network's signal
+// to SIGNAL_SPECS once and it's collected here automatically.
+//
+// Each spec is { key, from: 'cookie'|'url', name, transform?, fallback? }. We
+// read the source, apply the named transform, and fall back to a secondary
+// source (e.g. fbclid → _fbc) when the primary is absent. Only signals actually
+// present are returned, keyed by `key` (what the server adapters read off
+// ids.signals). These exist only in the browser, so we harvest them at
+// conversion time and send them in the POST.
+
+import { signalSpecs } from 'whitebox-adnetworks/networks'
 
 function cookie(name) {
   if (typeof document === 'undefined') return null
@@ -17,31 +24,34 @@ function param(name) {
   return new URLSearchParams(window.location.search).get(name)
 }
 
-// _ga is "GA1.1.<client_id>" where client_id is the last two dot-segments.
-function gaClientId() {
-  const ga = cookie('_ga')
-  if (!ga) return null
-  const parts = ga.split('.')
-  return parts.length >= 4 ? `${parts[2]}.${parts[3]}` : null
+// Named transforms referenced by the specs (client-side implementations).
+const TRANSFORMS = {
+  // _ga = "GA1.1.<client_id>" → client_id is the last two dot-segments.
+  ga_cid: (raw) => { const p = String(raw).split('.'); return p.length >= 4 ? `${p[2]}.${p[3]}` : null },
+  // fbclid URL param → the _fbc value Meta expects.
+  build_fbc: (fbclid) => `fb.1.${Date.now()}.${fbclid}`,
 }
 
-// _fbc is derived from the fbclid URL param when the cookie isn't set yet.
-function fbc() {
-  const c = cookie('_fbc')
-  if (c) return c
-  const fbclid = param('fbclid')
-  return fbclid ? `fb.1.${Date.now()}.${fbclid}` : null
-}
+const readSource = (from, name) => (from === 'url' ? param(name) : cookie(name))
 
-// Returns only the signals actually present (no null keys).
-export function collectSignals() {
-  const all = {
-    ga_client_id: gaClientId(),
-    fbp:    cookie('_fbp'),
-    fbc:    fbc(),
-    ttp:    cookie('_ttp'),
-    ttclid: cookie('ttclid') || param('ttclid'),
-    gclid:  param('gclid'),
+function readSpec(spec) {
+  let raw = readSource(spec.from, spec.name)
+  if (raw != null) return spec.transform ? TRANSFORMS[spec.transform]?.(raw) ?? null : raw
+  // primary absent → try the fallback source (already-transformed).
+  if (spec.fallback) {
+    const fv = readSource(spec.fallback.from, spec.fallback.name)
+    if (fv != null) return spec.fallback.transform ? TRANSFORMS[spec.fallback.transform]?.(fv) ?? null : fv
   }
-  return Object.fromEntries(Object.entries(all).filter(([, v]) => v != null))
+  return null
+}
+
+// Collect the signals the selected networks declare. `networks` is the same
+// selection the pixels use (list/map/undefined ⇒ all).
+export function collectSignals(networks) {
+  const out = {}
+  for (const spec of signalSpecs(networks)) {
+    const v = readSpec(spec)
+    if (v != null) out[spec.key] = v
+  }
+  return out
 }

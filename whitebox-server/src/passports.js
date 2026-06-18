@@ -150,24 +150,63 @@ export async function link(passportId, items) {
   }
 }
 
-async function merge(survivorId, absorbedId) {
+// Merge `absorbed` into `survivor`: move every reference onto the survivor and
+// record the merge so resolve() forwards future hits. NON-DESTRUCTIVE — the
+// absorbed passport is kept as a childless tombstone (no CASCADE data loss, no
+// FK-violation on a delete). References are discovered from the Postgres catalog,
+// so any table with a FK to whitebox_passports is moved automatically — no
+// hardcoded table list, new plugin tables included for free.
+export async function merge(survivorId, absorbedId) {
+  survivorId = await resolve(survivorId)
+  absorbedId = await resolve(absorbedId)
+  if (!survivorId || !absorbedId || survivorId === absorbedId) return survivorId
+
   const key = [survivorId, absorbedId].sort().join(':')
   const acquired = await lock.acquire(`passport:merge:${key}`, 5000)
 
   try {
     await db.transaction(async trx => {
+      // 1. Identities. Strong types are globally unique on (type, value), so the
+      //    survivor can never already hold the same value → always safe to move.
+      //    Weak types are per-passport → dedupe against the survivor.
       const absorbed = await trx(IDENTITIES).where({ passport_id: absorbedId })
-      for (const identity of absorbed) {
-        const conflict = await trx(IDENTITIES).where({ type: identity.type, value: identity.value }).first()
-        if (!conflict) {
-          await trx(IDENTITIES).where({ id: identity.id }).update({ passport_id: survivorId })
+      for (const id of absorbed) {
+        if (STRONG.has(id.type)) {
+          await trx(IDENTITIES).where({ id: id.id }).update({ passport_id: survivorId })
+        } else {
+          const dup = await trx(IDENTITIES)
+            .where({ passport_id: survivorId, type: id.type, name: id.name, value: id.value }).first()
+          if (dup) await trx(IDENTITIES).where({ id: id.id }).del()
+          else await trx(IDENTITIES).where({ id: id.id }).update({ passport_id: survivorId })
         }
       }
+
+      // 2. Every OTHER table with a single-column FK to whitebox_passports(id),
+      //    discovered from the catalog. passport_id is never part of a unique
+      //    constraint outside identities (handled above), so a blind re-point is
+      //    safe. (This also compacts whitebox_passports_merges.survivor_id.)
+      const { rows } = await trx.raw(`
+        SELECT cl.relname AS tbl, a.attname AS col
+        FROM pg_constraint con
+        JOIN pg_class cl     ON cl.oid = con.conrelid
+        JOIN pg_attribute a  ON a.attrelid = con.conrelid AND a.attnum = con.conkey[1]
+        WHERE con.contype = 'f'
+          AND con.confrelid = 'whitebox_passports'::regclass
+          AND array_length(con.conkey, 1) = 1
+      `)
+      for (const { tbl, col } of rows) {
+        if (tbl === IDENTITIES) continue
+        await trx(tbl).where(col, absorbedId).update({ [col]: survivorId })
+      }
+
+      // 3. Record the alias so resolve() forwards absorbed → survivor. The
+      //    absorbed passport row stays (now childless) — we do NOT delete it.
       await trx(MERGES).insert({ absorbed_id: absorbedId, survivor_id: survivorId })
-      await trx(PASSPORTS).where({ id: absorbedId }).delete()
     })
     logger.info('Merged passport %s into %s', absorbedId, survivorId)
   } finally {
     await lock.release(acquired)
   }
+
+  return survivorId
 }

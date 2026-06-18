@@ -59,7 +59,7 @@ export function conversions(options = {}) {
 
       // Init singletons in dependency order.
       store.init({ db })
-      ingest.init({ awareness, reporter, consentOk, logger })
+      ingest.init({ awareness, reporter, consentOk, logger, resolvePassport: passports.resolve })
 
       mountRoutes(app, { requireAuth, logger })
       registerMcp(ctx, { store })

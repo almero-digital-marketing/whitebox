@@ -109,13 +109,23 @@ describe('browser pixels — firing + mapping', () => {
     expect(requests[0].opts.body.events[0].transaction_id).toBe('ORD-42')
   })
 
-  it('collects browser ad signals and sends them in the POST', async () => {
+  it('collects browser ad signals (spec-driven) and sends them in the POST', async () => {
     document.cookie = '_ga=GA1.1.1234567890.1681000000'
     document.cookie = '_fbp=fb.1.1681000000.987654321'
     const { api, requests } = setup()
     await api.lead({})
     const sig = requests[0].opts.body.signals
-    expect(sig.ga_client_id).toBe('1234567890.1681000000')
-    expect(sig.fbp).toBe('fb.1.1681000000.987654321')
+    expect(sig.ga_client_id).toBe('1234567890.1681000000')   // google spec, ga_cid transform
+    expect(sig.fbp).toBe('fb.1.1681000000.987654321')        // meta spec
+  })
+
+  it('only collects signals for the selected networks', async () => {
+    document.cookie = '_ga=GA1.1.111.222'   // google signal present in the browser…
+    document.cookie = '_fbp=fb.1.5.9'
+    const { api, requests } = setup({ networks: ['meta'] })   // …but only meta is selected
+    await api.lead({})
+    const sig = requests[0].opts.body.signals
+    expect(sig.fbp).toBe('fb.1.5.9')        // meta spec collected
+    expect(sig.ga_client_id).toBeUndefined() // google spec NOT collected
   })
 })

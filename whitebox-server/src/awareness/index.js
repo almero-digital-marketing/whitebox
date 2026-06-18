@@ -13,6 +13,13 @@ function hashContent(text) {
   return crypto.createHash('sha256').update(text).digest('hex')
 }
 
+// Follow the passport merge chain so an absorbed (merged-away) id maps to its
+// survivor everywhere awareness reads or writes — a stale id never orphans data
+// under a tombstone. No-op if passports isn't wired (e.g. unit tests).
+async function resolveId(id) {
+  return id && passports?.resolve ? passports.resolve(id) : id
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Dependencies / state captured once via init() — module-level singleton, no
@@ -24,9 +31,11 @@ let logger
 let enabled
 let redactPii
 let notify
+let passports
 
 export function init(deps) {
   db = deps.db
+  passports = deps.passports
   logger = deps.logger.child({ component: 'awareness' })
   const cfg = deps.config.awareness || {}
   enabled = cfg.enabled !== false
@@ -60,7 +69,7 @@ export async function record(event) {
   const content_hash = hashContent(text)
 
   const exposure = await store.insertExposure({
-    passport_id: event.passport_id,
+    passport_id: await resolveId(event.passport_id),
     session_id: event.session_id || null,
     ts: event.ts || new Date(),
     channel: event.channel,
@@ -104,6 +113,7 @@ export async function reset() {
 
 export async function forget({ passport_id }) {
   if (!enabled) return 0
+  passport_id = await resolveId(passport_id)
   const deleted = await store.deletePassport(passport_id)
 
   // GC chunks whose content_hash is no longer referenced by any exposure.
@@ -123,7 +133,7 @@ export async function forget({ passport_id }) {
 
 export async function recall(args) {
   if (!enabled) return []
-  return query.recall(args)
+  return query.recall({ ...args, passport_id: await resolveId(args.passport_id) })
 }
 
 export async function population(args) {
@@ -143,12 +153,12 @@ export async function sampleContent(args) {
 
 export async function timeline(args) {
   if (!enabled) return []
-  return store.timeline(args)
+  return store.timeline({ ...args, passport_id: await resolveId(args.passport_id) })
 }
 
 export async function ask(args) {
   if (!enabled) return { answer: 'Awareness is disabled.', evidence: [], context: {} }
-  return askCore.ask(args)
+  return askCore.ask({ ...args, passport_id: await resolveId(args.passport_id) })
 }
 
 // Population-scope synthesis — a grounded answer about the whole customer base

@@ -13,7 +13,7 @@
 // consent themselves; the adapters just fire.
 
 export { buildAdapters } from './adapters/index.js'
-export { NETWORK_NAMES, PIXEL_GLOBAL, selectedNetworks } from './networks.js'
+export { NETWORK_NAMES, PIXEL_GLOBAL, SIGNAL_SPECS, selectedNetworks, signalSpecs } from './networks.js'
 export { STANDARD_EVENTS, resolveEventName } from './taxonomy.js'
 export { hashEmail, hashPhone, sha256, composeManifest, pick } from './identity.js'
 

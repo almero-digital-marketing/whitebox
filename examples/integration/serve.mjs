@@ -30,6 +30,33 @@ const SERVER_DIR = path.resolve(__dirname, '../../whitebox-server')
 const TARGET_IS_LOCAL = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(TARGET.hostname)
 const START_SERVER = process.env.WB_START_SERVER !== '0' && TARGET_IS_LOCAL
 
+// Load whitebox-server/.env into our env too, so we can inject the SAME ad-pixel
+// ids the server uses (WB_META_PIXEL_ID / WB_GA4_MEASUREMENT_ID /
+// WB_TIKTOK_PIXEL_CODE). Best-effort — needs Node ≥20.6 and the file present.
+try { process.loadEnvFile?.(path.join(SERVER_DIR, '.env')) } catch {}
+
+// The standard ad-network pixel base snippets, injected into <head> only when a
+// pixel id is configured. The conversions client plugin fires events on these
+// globals; loading + init lives here (the page), not in the plugin.
+function pixelSnippets() {
+  const meta = process.env.WB_META_PIXEL_ID, ga4 = process.env.WB_GA4_MEASUREMENT_ID, tt = process.env.WB_TIKTOK_PIXEL_CODE
+  const on = [], html = []
+  if (meta) {
+    on.push('meta')
+    html.push(`<!-- Meta Pixel --><script>!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${meta}');fbq('track','PageView');</script>`)
+  }
+  if (ga4) {
+    on.push('ga4')
+    html.push(`<!-- GA4 --><script async src="https://www.googletagmanager.com/gtag/js?id=${ga4}"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${ga4}');</script>`)
+  }
+  if (tt) {
+    on.push('tiktok')
+    html.push(`<!-- TikTok Pixel --><script>!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var a=d.createElement("script");a.type="text/javascript",a.async=!0,a.src=r+"?sdkid="+e+"&lib="+t;var s=d.getElementsByTagName("script")[0];s.parentNode.insertBefore(a,s)};ttq.load('${tt}');ttq.page()}(window,document,'ttq');</script>`)
+  }
+  return { html: html.join('\n'), on }
+}
+const PIXELS = pixelSnippets()
+
 const API_PREFIXES = [
   '/sessions', '/engagement', '/socket.io', '/analytics',
   '/mail', '/voip', '/crm', '/conversions', '/health', '/output',
@@ -108,8 +135,10 @@ const server = http.createServer(async (req, res) => {
     const noCache = { 'cache-control': 'no-store, no-cache, must-revalidate' }
     const url = req.url.split('?')[0]
     if (url === '/' || url === '/index.html') {
+      let html = await readFile(path.join(__dirname, 'index.html'), 'utf8')
+      if (PIXELS.html) html = html.replace('</head>', `${PIXELS.html}\n</head>`)
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', ...noCache })
-      return res.end(await readFile(path.join(__dirname, 'index.html')))
+      return res.end(html)
     }
     if (url === '/main.js') {
       const js = await bundleMain()
@@ -140,6 +169,9 @@ server.on('upgrade', (req, clientSocket, head) => {
 server.listen(PORT, async () => {
   console.log(`WhiteBox SaaS integration demo [auto-start server] → http://localhost:${PORT}`)
   console.log(`proxying API + WS → ${TARGET.href}`)
+  console.log(PIXELS.on.length
+    ? `[demo] injecting ad pixels: ${PIXELS.on.join(', ')} (set WB_*_PIXEL_* in whitebox-server/.env)`
+    : '[demo] no ad pixels configured — conversions record server-side only (set WB_META_PIXEL_ID / WB_GA4_MEASUREMENT_ID / WB_TIKTOK_PIXEL_CODE to load them)')
 
   if (!START_SERVER) {
     console.log(TARGET_IS_LOCAL
