@@ -81,7 +81,9 @@ export default function conversionsPlugin(options = {}) {
             method: 'POST',
             // signals carry the browser-only ad cookies the server APIs match on
             // (GA4 client_id is required; _fbp/_fbc/_ttp improve CAPI matching).
-            body: { passport_id: getPassportId?.(), events: [event], signals: collectSignals() },
+            // Collected per the selected networks' declarative specs (not a
+            // hardcoded list) — same vocabulary the server adapters declare.
+            body: { passport_id: getPassportId?.(), events: [event], signals: collectSignals(networkSelect) },
           })
           return { event_id: eventId, pixels: firedPixels }
         }

@@ -59,6 +59,13 @@ match on — `_ga` (→ GA4 `client_id`, **required** by the Measurement Protoco
 `_fbp`/`_fbc`, `_ttp`/`ttclid`, `gclid` — and includes them in the POST so the
 server-side CAPI/MP hits can match the user. See [signals.js](src/signals.js).
 
+Collection is **spec-driven, not hardcoded**: it reads the declarative
+`SIGNAL_SPECS` in `whitebox-adnetworks/networks` — the same `identitySpec`s the
+server adapters expose (and `composeManifest()` unions). Add a network's signal
+there once and both the server adapter and this collector pick it up. Only the
+selected networks' signals are collected (so `networks: ['meta']` harvests
+`_fbp`/`_fbc` but not `_ga`).
+
 ## Dedup & GA4
 
 - **Meta / TikTok** fire **both** sides — client pixel + server SST — deduped by

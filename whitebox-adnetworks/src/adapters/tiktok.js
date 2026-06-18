@@ -2,6 +2,7 @@
 
 import { resolveEventName } from '../taxonomy.js'
 import { pick } from '../identity.js'
+import { SIGNAL_SPECS } from '../networks.js'
 
 const EVENTS = 'https://business-api.tiktok.com/open_api/v1.3/event/track/'
 
@@ -11,10 +12,7 @@ export function createTiktok(cfg, { logger } = {}) {
     name: 'tiktok',
     modes: ['event'],
     eligible,
-    identitySpec: [
-      { key: 'ttclid', from: 'url', name: 'ttclid' },
-      { key: 'ttp', from: 'cookie', name: '_ttp' },
-    ],
+    identitySpec: SIGNAL_SPECS.tiktok,
     acceptedKeys: ['email', 'phone', 'ttclid', 'ttp', 'ip', 'user_agent'],
 
     async sendEvent(canonical, ids) {

@@ -3,6 +3,7 @@
 
 import { resolveEventName } from '../taxonomy.js'
 import { pick } from '../identity.js'
+import { SIGNAL_SPECS } from '../networks.js'
 
 const GRAPH = 'https://graph.facebook.com/v19.0'
 
@@ -12,10 +13,7 @@ export function createMeta(cfg, { logger } = {}) {
     name: 'meta',
     modes: ['event'],
     eligible,
-    identitySpec: [
-      { key: 'fbp', from: 'cookie', name: '_fbp' },
-      { key: 'fbc', from: 'cookie', name: '_fbc', fallback: { from: 'url', name: 'fbclid', transform: 'build_fbc' } },
-    ],
+    identitySpec: SIGNAL_SPECS.meta,
     acceptedKeys: ['email', 'phone', 'fbp', 'fbc', 'external_id', 'client_ip_address', 'client_user_agent'],
 
     // canonical: { event | standard, event_id, ts, value?, currency?, content_ids? }
