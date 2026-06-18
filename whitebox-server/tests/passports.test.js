@@ -6,7 +6,7 @@ vi.mock('../src/logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }))
 
-const { identify, link, identities, findByIdentity, init } = await import('../src/passports.js')
+const { identify, link, identities, findByIdentity, resolve, merge, init } = await import('../src/passports.js')
 
 // ---------------------------------------------------------------------------
 // Lock mock — no Redis needed for passport tests
@@ -27,24 +27,28 @@ const db = knex({
   pool: { min: 1, max: 5 },
 })
 
-const TABLES = [
-  'whitebox_passports_merges',
-  'whitebox_passports_identities',
-  'whitebox_passports',
-]
-
 beforeAll(async () => {
   await init({ db, lock, config: {} })
+  // A synthetic table with a FK to passports — proves the catalog-driven merge
+  // moves arbitrary referencing rows without the merge knowing the table exists.
+  await db.schema.dropTableIfExists('wb_merge_test_refs')
+  await db.schema.createTable('wb_merge_test_refs', t => {
+    t.increments('id')
+    t.uuid('passport_id').references('id').inTable('whitebox_passports')
+    t.text('note')
+  })
 })
 
 afterAll(async () => {
+  await db.schema.dropTableIfExists('wb_merge_test_refs')
   await db.destroy()
 })
 
 beforeEach(async () => {
-  for (const table of TABLES) {
-    await db(table).del()
-  }
+  // TRUNCATE … CASCADE clears passports + everything that references them
+  // (identities, merges, and any sessions/exposures inherited from the parent
+  // Neon branch), so the per-test slate is clean regardless of FK direction.
+  await db.raw('TRUNCATE TABLE whitebox_passports CASCADE')
   lock.acquire.mockClear()
   lock.release.mockClear()
 })
@@ -145,8 +149,13 @@ describe('link — strong identities', () => {
       last_seen_at: daysAgo(1),
     })
     await link(b, [{ type: 'phone', name: 'e164', value: '+35988000000' }])
-    const merge = await db('whitebox_passports_merges').first()
-    expect(merge).toBeTruthy()
+    const mergeRow = await db('whitebox_passports_merges').first()
+    expect(mergeRow).toBeTruthy()
+    // the triggering identity is MOVED onto the survivor (b), not lost
+    const moved = await db('whitebox_passports_identities').where({ value: '+35988000000' }).first()
+    expect(moved.passport_id).toBe(b)
+    // the absorbed passport survives as a tombstone (not deleted)
+    expect(await db('whitebox_passports').where({ id: a }).first()).toBeTruthy()
     expect(lock.acquire).toHaveBeenCalled()
     expect(lock.release).toHaveBeenCalled()
   })
@@ -244,5 +253,65 @@ describe('identities', () => {
     const result = await identities(a)
     expect(result).toHaveLength(1)
     expect(result[0].passport_id).toBe(b)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// merge — non-destructive, catalog-driven
+// ---------------------------------------------------------------------------
+
+describe('merge', () => {
+  it('moves identities + all FK references to the survivor and keeps the absorbed as a tombstone', async () => {
+    const survivor = await identify(null)
+    const absorbed = await identify(null)
+    await link(absorbed, [
+      { type: 'email', name: 'email', value: 'x@y.com' },   // strong
+      { type: 'gender', name: 'gender', value: 'male' },     // weak
+    ])
+    await db('wb_merge_test_refs').insert([{ passport_id: absorbed, note: 'a' }, { passport_id: absorbed, note: 'b' }])
+
+    const result = await merge(survivor, absorbed)
+    expect(result).toBe(survivor)
+
+    // identities moved off the absorbed onto the survivor
+    const ids = await db('whitebox_passports_identities').where({ passport_id: survivor })
+    expect(ids.map(i => i.value).sort()).toEqual(['male', 'x@y.com'])
+    expect(await db('whitebox_passports_identities').where({ passport_id: absorbed }).first()).toBeUndefined()
+
+    // arbitrary FK rows moved — discovered from the catalog, not hardcoded
+    const refs = await db('wb_merge_test_refs').where({ passport_id: survivor })
+    expect(refs).toHaveLength(2)
+    expect(await db('wb_merge_test_refs').where({ passport_id: absorbed }).first()).toBeUndefined()
+
+    // absorbed passport is NOT deleted; resolve() forwards it to the survivor
+    expect(await db('whitebox_passports').where({ id: absorbed }).first()).toBeTruthy()
+    expect(await resolve(absorbed)).toBe(survivor)
+  })
+
+  it('dedupes a weak identity already present on the survivor', async () => {
+    const survivor = await identify(null)
+    const absorbed = await identify(null)
+    await link(survivor, [{ type: 'gender', name: 'gender', value: 'male' }])
+    await link(absorbed, [{ type: 'gender', name: 'gender', value: 'male' }])
+    await merge(survivor, absorbed)
+    const genders = await db('whitebox_passports_identities').where({ type: 'gender', value: 'male' })
+    expect(genders).toHaveLength(1)
+    expect(genders[0].passport_id).toBe(survivor)
+  })
+
+  it('is a no-op when survivor === absorbed', async () => {
+    const p = await identify(null)
+    expect(await merge(p, p)).toBe(p)
+    const { n } = await db('whitebox_passports_merges').count('id as n').first()
+    expect(Number(n)).toBe(0)
+  })
+
+  it('compacts the merge chain (re-points an existing survivor_id)', async () => {
+    const a = await identify(null)
+    const b = await identify(null)
+    const c = await identify(null)
+    await merge(b, a)   // a → b
+    await merge(c, b)   // b → c  (should also re-point a → c)
+    expect(await resolve(a)).toBe(c)
   })
 })

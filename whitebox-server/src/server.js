@@ -67,7 +67,7 @@ async function start() {
 
   context.init({ logger })
   awareness.init({
-    db: db.get(), queue, ai, events, webhooks, config, logger, context,
+    db: db.get(), queue, ai, events, webhooks, config, logger, context, passports,
   })
   await awareness.migrate()
   logger.info('Awareness ready')
