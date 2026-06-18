@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import * as store from './store.js'
 import * as memory from './memory.js'
 import * as query from './query.js'
+import * as askCore from './ask.js'
 import createNotify from '../notify.js'
 import { redact } from './pii.js'
 
@@ -26,7 +27,7 @@ let notify
 
 export function init(deps) {
   db = deps.db
-  logger = deps.logger.child({ core: 'awareness' })
+  logger = deps.logger.child({ component: 'awareness' })
   const cfg = deps.config.awareness || {}
   enabled = cfg.enabled !== false
   redactPii = cfg.pii?.redact !== false
@@ -34,8 +35,11 @@ export function init(deps) {
   ;({ notify } = createNotify({ webhooksConfig: cfg.webhooks, events: deps.events, webhooks: deps.webhooks }))
 
   store.init({ db })
-  if (enabled) memory.init({ store, openai: deps.openai, queue: deps.queue, config: deps.config, logger })
-  query.init({ store, openai: deps.openai, logger })
+  if (enabled) memory.init({ store, ai: deps.ai, queue: deps.queue, config: deps.config, logger })
+  query.init({ store, ai: deps.ai, logger })
+  // The reasoning primitives: per-passport (recall + context) and cohort /
+  // whole-base (population + base stats + sample) → grounded synthesis.
+  askCore.init({ ai: deps.ai, context: deps.context, recall, population, populationStats, sampleContent })
 }
 
 export async function migrate() {
@@ -91,6 +95,13 @@ export async function record(event) {
   return exposure
 }
 
+// Dev/demo reset — wipe all awareness content. Gated by the server's --reset
+// flag; not a normal-operation primitive.
+export async function reset() {
+  if (!enabled) return
+  await store.reset()
+}
+
 export async function forget({ passport_id }) {
   if (!enabled) return 0
   const deleted = await store.deletePassport(passport_id)
@@ -120,7 +131,29 @@ export async function population(args) {
   return query.population(args)
 }
 
+export async function populationStats() {
+  if (!enabled) return { customers: 0, exposures: 0, breakdown: [] }
+  return query.populationStats()
+}
+
+export async function sampleContent(args) {
+  if (!enabled) return []
+  return query.sampleContent(args)
+}
+
 export async function timeline(args) {
   if (!enabled) return []
   return store.timeline(args)
+}
+
+export async function ask(args) {
+  if (!enabled) return { answer: 'Awareness is disabled.', evidence: [], context: {} }
+  return askCore.ask(args)
+}
+
+// Population-scope synthesis — a grounded answer about the whole customer base
+// (or a semantic cohort within it), not a single passport.
+export async function askPopulation(args) {
+  if (!enabled) return { answer: 'Awareness is disabled.', cohort: { count: 0 }, evidence: [] }
+  return askCore.askPopulation(args)
 }

@@ -180,20 +180,19 @@ export default function createPhoneTracker({ transport, http, emitter, logger, o
       logger?.debug?.('voip: maxHoldMs elapsed for %s', tag)
       release(tag)
     }, cfg.maxHoldMs)
-
-    emitter?.emit?.('voip.number', { tag, number, formatted: s.formatted })
   }
 
   function onUnavailable({ tag }) {
     const s = ensureTag(tag)
     s.state = 'idle'
     s.backoffUntil = Date.now() + cfg.requestBackoffMs
-    emitter?.emit?.('voip.unavailable', { tag })
   }
 
-  function onRing(payload) {
-    emitter?.emit?.('voip.ring', payload)
-  }
+  // voip.number / voip.unavailable / voip.ring already reach app consumers on the
+  // core emitter (the transport forwards incoming socket events there), so we do
+  // NOT re-emit them — that would self-trigger our own handlers on the same bus.
+  // This plugin's job is the side effects: DOM swap (assign) + backoff (above).
+  function onRing() {}
 
   // -------- IntersectionObserver --------
 
@@ -284,9 +283,11 @@ export default function createPhoneTracker({ transport, http, emitter, logger, o
       threshold: [0, cfg.minRatio, 1],
     })
 
-    transport?.on?.('voip.number', onNumberAssigned)
-    transport?.on?.('voip.unavailable', onUnavailable)
-    transport?.on?.('voip.ring', onRing)
+    // Incoming server events arrive on the core emitter (the transport forwards
+    // socket.onAny → emitter.emit); the transport itself has no .on().
+    emitter?.on?.('voip.number', onNumberAssigned)
+    emitter?.on?.('voip.unavailable', onUnavailable)
+    emitter?.on?.('voip.ring', onRing)
 
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('blur', onBlur)
@@ -299,9 +300,9 @@ export default function createPhoneTracker({ transport, http, emitter, logger, o
 
     releaseAll()
 
-    transport?.off?.('voip.number', onNumberAssigned)
-    transport?.off?.('voip.unavailable', onUnavailable)
-    transport?.off?.('voip.ring', onRing)
+    emitter?.off?.('voip.number', onNumberAssigned)
+    emitter?.off?.('voip.unavailable', onUnavailable)
+    emitter?.off?.('voip.ring', onRing)
 
     document.removeEventListener('visibilitychange', onVisibilityChange)
     window.removeEventListener('blur', onBlur)

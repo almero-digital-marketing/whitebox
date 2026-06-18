@@ -1,0 +1,27 @@
+{
+  "name": "whitebox-adnetworks",
+  "version": "0.1.0",
+  "description": "Shared ad-network transport for WhiteBox: Meta CAPI, TikTok Events API, GA4 Measurement Protocol. Fires custom or standard events, with a standard-event taxonomy, identity hashing, and client-collection manifest composition. Used by the audiences (custom events) and analytics (standard events) plugins.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./schemas": "./src/schemas.js",
+    "./taxonomy": "./src/taxonomy.js",
+    "./networks": "./src/networks.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0"
+  }
+}

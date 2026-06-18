@@ -23,6 +23,18 @@ describe('consent (built-in core)', () => {
       expect(consent.has('analytics')).toBe(false)
     })
 
+    it('decided() distinguishes an explicit choice from "never asked"', () => {
+      const emitter = createEmitter()
+      const consent = createConsent({ emitter, required: ['analytics', 'marketing'] })
+
+      expect(consent.decided('analytics')).toBe(false)   // never asked
+      consent.grant('analytics')
+      expect(consent.decided('analytics')).toBe(true)    // granted = decided
+      consent.revoke('analytics')
+      expect(consent.has('analytics')).toBe(false)
+      expect(consent.decided('analytics')).toBe(true)    // denied is still decided
+    })
+
     it('allGranted requires every category in `required`', () => {
       const emitter = createEmitter()
       const consent = createConsent({ emitter, required: ['analytics', 'marketing'] })

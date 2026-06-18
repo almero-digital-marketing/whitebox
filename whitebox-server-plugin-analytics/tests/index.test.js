@@ -1,33 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
-import analyticsPlugin from '../src/index.js'
+import { analytics } from '../src/index.js'
 
 const SECRET = 'test-secret-123'
 
-function makeApp({ awarenessOverrides = {}, openaiOverrides = {}, context = null } = {}) {
+function makeApp({ awarenessOverrides = {}, context = null } = {}) {
   const awareness = {
     recall: vi.fn(async () => [{ id: 1, chunk_text: 'hit', similarity: 0.9 }]),
     population: vi.fn(async () => ({ count: 2, passports: [] })),
     timeline: vi.fn(async () => [{ id: 1, ts: new Date(), text: 'event' }]),
     forget: vi.fn(async () => 5),
+    // synthesis lives in the awareness core now; the plugin just delegates
+    ask: vi.fn(async () => ({ answer: 'Synthesized answer with citations.', evidence: [{ id: 1 }], context: {} })),
+    askPopulation: vi.fn(async () => ({ answer: 'Across the base, customers care about pricing.', evidence: [{ chunk_text: 'pricing', passport_count: 12 }], cohort: { count: 12 } })),
     ...awarenessOverrides,
-  }
-  const openai = {
-    prompt: vi.fn(async () => 'Synthesized answer with citations.'),
-    ...openaiOverrides,
   }
   const app = express()
   // No body parser in test — we set req.body directly
   const logger = { child: () => logger, warn: vi.fn(), error: vi.fn(), info: vi.fn() }
   const ctx = {
-    config: { analytics: { auth: { secret: SECRET } } },
     awareness,
-    openai,
     context,
     logger,
   }
-  analyticsPlugin.register(app, ctx)
-  return { app, awareness, openai, context }
+  analytics({ auth: { secret: SECRET } }).register(app, ctx)
+  return { app, awareness, context }
 }
 
 async function request(app, method, path, { auth, body } = {}) {
@@ -90,11 +87,14 @@ describe('analytics.recall', () => {
       body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', query: 'pricing', limit: 5 },
     })
     expect(status).toBe(200)
-    expect(body.hits).toHaveLength(1)
+    expect(body.data).toHaveLength(1)
+    expect(body).toMatchObject({ limit: 5, offset: 0, has_more: false })
     expect(awareness.recall).toHaveBeenCalledWith({
       passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab',
       query: 'pricing',
-      limit: 5,
+      limit: 6,    // page limit 5 + 1 extra row to detect has_more
+      offset: 0,
+      min_similarity: 0,
     })
   })
 
@@ -138,12 +138,13 @@ describe('analytics.population', () => {
       body: { query: 'spring promotion', similarity: 0.8 },
     })
     expect(status).toBe(200)
-    expect(body.count).toBe(3)
-    expect(body.passports).toHaveLength(3)
-    expect(awareness.population).toHaveBeenCalledWith({
+    expect(body.total).toBe(3)               // cohort size
+    expect(body.data).toHaveLength(3)        // paginated passport drilldown
+    expect(body).toMatchObject({ limit: 50, offset: 0, has_more: false })
+    expect(awareness.population).toHaveBeenCalledWith(expect.objectContaining({
       query: 'spring promotion',
       similarity: 0.8,
-    })
+    }))
   })
 
   it('returns 400 on missing query', async () => {
@@ -164,9 +165,11 @@ describe('analytics.timeline', () => {
       auth: SECRET,
     })
     expect(status).toBe(200)
-    expect(body).toHaveLength(1)
+    expect(body.data).toHaveLength(1)
+    expect(body).toMatchObject({ limit: 50, offset: 0, has_more: false })
     expect(awareness.timeline).toHaveBeenCalledWith(expect.objectContaining({
       passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab',
+      limit: 51, offset: 0,
     }))
   })
 
@@ -218,8 +221,8 @@ describe('analytics.context', () => {
 
     expect(status).toBe(200)
     expect(body.providers).toEqual(['crm', 'billing'])
-    expect(body.page).toBe(1)
-    expect(body.page_size).toBe(20)
+    expect(body.limit).toBe(20)
+    expect(body.offset).toBe(0)
     expect(body.context.crm).toHaveLength(1)
     expect(body.context.billing).toEqual({ plan: 'pro' })
     expect(context.collect).toHaveBeenCalledWith(
@@ -265,14 +268,14 @@ describe('analytics.context', () => {
     expect(context.collect).not.toHaveBeenCalled()
   })
 
-  it('translates page + page_size into limit/offset', async () => {
+  it('passes limit/offset through to the registry', async () => {
     const context = {
       names: () => ['crm'],
       collect: vi.fn(async () => ({ crm: [] })),
     }
     const { app } = makeApp({ context })
     await request(app, 'GET',
-      '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab?page=3&page_size=10',
+      '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab?limit=10&offset=20',
       { auth: SECRET })
     expect(context.collect).toHaveBeenCalledWith(
       'a1b2c3d4-5678-4abc-89de-1234567890ab',
@@ -280,16 +283,16 @@ describe('analytics.context', () => {
     )
   })
 
-  it('clamps page_size to 200', async () => {
+  it('clamps limit to 200', async () => {
     const context = {
       names: () => ['crm'],
       collect: vi.fn(async () => ({ crm: [] })),
     }
     const { app } = makeApp({ context })
     const { body } = await request(app, 'GET',
-      '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab?page_size=999',
+      '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab?limit=999',
       { auth: SECRET })
-    expect(body.page_size).toBe(200)
+    expect(body.limit).toBe(200)
     expect(context.collect).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ limit: 200, offset: 0 })
@@ -305,7 +308,7 @@ describe('analytics.context', () => {
     }
     const { app } = makeApp({ context })
     const { body } = await request(app, 'GET',
-      '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab?page_size=5',
+      '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab?limit=5',
       { auth: SECRET })
     expect(body.has_more).toEqual({ crm: true })
   })
@@ -317,7 +320,7 @@ describe('analytics.context', () => {
     }
     const { app } = makeApp({ context })
     const { body } = await request(app, 'GET',
-      '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab?page_size=5',
+      '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab?limit=5',
       { auth: SECRET })
     expect(body.has_more).toEqual({ crm: false })
   })
@@ -327,7 +330,7 @@ describe('analytics.context', () => {
     const { status, body } = await request(app, 'GET',
       '/analytics/context/a1b2c3d4-5678-4abc-89de-1234567890ab', { auth: SECRET })
     expect(status).toBe(200)
-    expect(body).toEqual({ providers: [], page: 1, page_size: 20, context: {} })
+    expect(body).toEqual({ providers: [], limit: 20, offset: 0, has_more: {}, context: {} })
   })
 })
 
@@ -359,176 +362,79 @@ describe('analytics.ask', () => {
     expect(status).toBe(400)
   })
 
-  it('returns synthesized answer + evidence on success', async () => {
-    const hits = [
-      {
-        id: 1,
-        chunk_text: 'Enterprise tier includes SSO.',
-        ts: new Date('2024-11-12T14:23:01Z'),
-        channel: 'web',
-        direction: 'exposure',
-        utm_source: 'google',
-        utm_campaign: 'spring-2025',
-        similarity: 0.92,
-      },
-    ]
-    const { app, openai } = makeApp({
-      awarenessOverrides: { recall: vi.fn(async () => hits) },
-      openaiOverrides: { prompt: vi.fn(async () => 'On 2024-11-12, the user (arrived via google/spring-2025) read about Enterprise SSO.') },
-    })
+  // Synthesis behaviour (recall + context + prompt policy) is the awareness
+  // core's job now — covered in whitebox-server/tests/awareness/ask.test.js.
+  // Here we only verify the route delegates + handles transport.
+  it('delegates to awareness.ask and returns its result', async () => {
+    const result = { answer: 'Grounded answer.', evidence: [{ id: 1 }], context: { crm: [] } }
+    const { app, awareness } = makeApp({ awarenessOverrides: { ask: vi.fn(async () => result) } })
 
     const { status, body } = await request(app, 'POST', '/analytics/ask', {
       auth: SECRET,
-      body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'What does this user know about SSO?' },
+      body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'What does this user know?', limit: 25 },
     })
 
     expect(status).toBe(200)
-    expect(body.answer).toContain('Enterprise SSO')
-    expect(body.evidence).toHaveLength(1)
-    expect(openai.prompt).toHaveBeenCalledOnce()
-    const [system, user] = openai.prompt.mock.calls[0]
-    expect(system).toContain('UTM attribution')
-    expect(user).toContain('Enterprise tier includes SSO')
-    expect(user).toContain('arrived via: google')
-    expect(user).toContain('What does this user know about SSO?')
+    expect(body).toEqual(result)
+    expect(awareness.ask).toHaveBeenCalledWith(expect.objectContaining({
+      passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab',
+      question: 'What does this user know?',
+      limit: 25,
+    }))
   })
 
-  it('formats evidence with timestamps, channel/direction, and UTM tags', async () => {
-    const hits = [
-      {
-        id: 1,
-        chunk_text: 'Subject: Welcome\n\nHello Alice',
-        ts: new Date('2024-11-10T09:01:44Z'),
-        channel: 'mail',
-        direction: 'exposure',
-        utm_source: 'newsletter',
-        utm_medium: 'email',
-        utm_campaign: 'weekly-digest',
-      },
-      {
-        id: 2,
-        chunk_text: 'Refunds within 30 days',
-        ts: new Date('2024-11-08T11:42:18Z'),
-        channel: 'web',
-        direction: 'exposure',
-        utm_source: null,
-        utm_medium: null,
-        utm_campaign: null,
-      },
-    ]
-    const { app, openai } = makeApp({
-      awarenessOverrides: { recall: vi.fn(async () => hits) },
-    })
-
-    await request(app, 'POST', '/analytics/ask', {
-      auth: SECRET,
-      body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'Has this user seen our refund policy?' },
-    })
-
-    const userPrompt = openai.prompt.mock.calls[0][1]
-    expect(userPrompt).toContain('mail/exposure')
-    expect(userPrompt).toContain('[arrived via: newsletter / email / weekly-digest]')
-    expect(userPrompt).toContain('web/exposure\nRefunds within 30 days')  // no UTM tag when null
-    expect(userPrompt).toMatch(/\n---\n/)  // separator between hits
-  })
-
-  it('returns "no relevant content" when recall is empty', async () => {
-    const { app, openai } = makeApp({
-      awarenessOverrides: { recall: vi.fn(async () => []) },
-    })
-    const { status, body } = await request(app, 'POST', '/analytics/ask', {
-      auth: SECRET,
-      body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'anything?' },
-    })
-    expect(status).toBe(200)
-    expect(body.answer).toMatch(/no relevant content/i)
-    expect(body.evidence).toEqual([])
-    expect(openai.prompt).not.toHaveBeenCalled()  // no LLM call when there's nothing to ground
-  })
-
-  it('returns 500 when openai fails', async () => {
-    const { app } = makeApp({
-      openaiOverrides: { prompt: vi.fn(async () => { throw new Error('openai down') }) },
-    })
+  it('returns 500 when awareness.ask throws', async () => {
+    const { app } = makeApp({ awarenessOverrides: { ask: vi.fn(async () => { throw new Error('ask down') }) } })
     const { status } = await request(app, 'POST', '/analytics/ask', {
       auth: SECRET,
       body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'x' },
     })
     expect(status).toBe(500)
   })
+})
 
-  it('includes structured context from registered providers in the prompt', async () => {
-    const context = {
-      collect: vi.fn(async () => ({
-        crm: [
-          { source: 'booking', kind: 'reservation', external_id: 'r1', status: 'confirmed', starts_at: '2026-06-12T14:00:00Z', data: { room: 'suite' } },
-        ],
-      })),
-    }
-    const { app, openai } = makeApp({ context })
+describe('analytics.ask-population', () => {
 
-    const { status, body } = await request(app, 'POST', '/analytics/ask', {
+  it('requires auth', async () => {
+    const { app } = makeApp()
+    const { status } = await request(app, 'POST', '/analytics/ask-population', {
+      body: { question: 'What do customers care about?' },
+    })
+    expect(status).toBe(401)
+  })
+
+  it('returns 400 on missing question', async () => {
+    const { app } = makeApp()
+    const { status } = await request(app, 'POST', '/analytics/ask-population', {
       auth: SECRET,
-      body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'When does this customer check in?' },
+      body: { similarity: 0.7 },
+    })
+    expect(status).toBe(400)
+  })
+
+  it('delegates to awareness.askPopulation (no passport_id) and returns its result', async () => {
+    const result = { answer: 'Customers care about SSO.', evidence: [{ chunk_text: 'SSO', passport_count: 9 }], cohort: { count: 9 } }
+    const { app, awareness } = makeApp({ awarenessOverrides: { askPopulation: vi.fn(async () => result) } })
+
+    const { status, body } = await request(app, 'POST', '/analytics/ask-population', {
+      auth: SECRET,
+      body: { question: 'What do customers care about?', similarity: 0.65 },
     })
 
     expect(status).toBe(200)
-    expect(context.collect).toHaveBeenCalledWith(
-      'a1b2c3d4-5678-4abc-89de-1234567890ab',
-      expect.objectContaining({ question: 'When does this customer check in?' })
-    )
-    const userPrompt = openai.prompt.mock.calls[0][1]
-    expect(userPrompt).toContain('Structured context:')
-    expect(userPrompt).toContain('crm:')
-    expect(userPrompt).toContain('reservation')
-    expect(userPrompt).toContain('2026-06-12')
-    // Response surfaces the raw context blob for the caller
-    expect(body.context).toEqual({ crm: expect.any(Array) })
+    expect(body).toEqual(result)
+    expect(awareness.askPopulation).toHaveBeenCalledWith(expect.objectContaining({
+      question: 'What do customers care about?',
+      similarity: 0.65,
+    }))
   })
 
-  it('answers from structured context alone when recall is empty', async () => {
-    const context = {
-      collect: vi.fn(async () => ({
-        crm: [{ source: 'stripe', kind: 'subscription', external_id: 'sub_1', status: 'active' }],
-      })),
-    }
-    const { app, openai } = makeApp({
-      awarenessOverrides: { recall: vi.fn(async () => []) },
-      context,
-    })
-
-    const { status, body } = await request(app, 'POST', '/analytics/ask', {
+  it('returns 500 when awareness.askPopulation throws', async () => {
+    const { app } = makeApp({ awarenessOverrides: { askPopulation: vi.fn(async () => { throw new Error('down') }) } })
+    const { status } = await request(app, 'POST', '/analytics/ask-population', {
       auth: SECRET,
-      body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'Active subscription?' },
+      body: { question: 'x' },
     })
-
-    expect(status).toBe(200)
-    expect(openai.prompt).toHaveBeenCalledOnce()  // structured context is enough — LLM is invoked
-    expect(body.evidence).toEqual([])
-    expect(body.context.crm).toHaveLength(1)
-  })
-
-  it('still short-circuits when BOTH structured context and recall are empty', async () => {
-    const context = { collect: vi.fn(async () => ({ crm: [] })) }
-    const { app, openai } = makeApp({
-      awarenessOverrides: { recall: vi.fn(async () => []) },
-      context,
-    })
-    const { status, body } = await request(app, 'POST', '/analytics/ask', {
-      auth: SECRET,
-      body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'anything?' },
-    })
-    expect(status).toBe(200)
-    expect(body.answer).toMatch(/no relevant content/i)
-    expect(openai.prompt).not.toHaveBeenCalled()
-  })
-
-  it('passes limit through to awareness.recall', async () => {
-    const { app, awareness } = makeApp()
-    await request(app, 'POST', '/analytics/ask', {
-      auth: SECRET,
-      body: { passport_id: 'a1b2c3d4-5678-4abc-89de-1234567890ab', question: 'x', limit: 25 },
-    })
-    expect(awareness.recall).toHaveBeenCalledWith(expect.objectContaining({ limit: 25 }))
+    expect(status).toBe(500)
   })
 })

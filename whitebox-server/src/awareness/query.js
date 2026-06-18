@@ -2,22 +2,22 @@ import * as store from './store.js'
 
 // Dependencies captured once via init() — module-level singletons, no
 // wrapping factory closure. Matches the core pattern (passports, sessions, …).
-let openai
+let ai
 let logger
 
 export function init(deps) {
-  openai = deps.openai
+  ai = deps.ai
   logger = deps.logger
 }
 
-export async function recall({ passport_id, query, limit = 10 }) {
-  const [embedding] = await openai.embed([query])
-  return store.recallChunks({ passport_id, embedding, limit })
+export async function recall({ passport_id, query, limit = 10, offset = 0, min_similarity = 0 }) {
+  const [embedding] = await ai.embed([query])
+  return store.recallChunks({ passport_id, embedding, limit, offset, minSimilarity: min_similarity })
 }
 
-export async function population({ query, similarity = 0.75, limit = 1000 }) {
-  const [embedding] = await openai.embed([query])
-  const matches = await store.populationChunks({ embedding, similarity, limit })
+export async function population({ query, similarity = 0.75, limit = 1000, min_engagement = 0 }) {
+  const [embedding] = await ai.embed([query])
+  const matches = await store.populationChunks({ embedding, similarity, limit, minEngagement: min_engagement })
 
   const byPassport = new Map()
   for (const m of matches) {
@@ -31,4 +31,15 @@ export async function population({ query, similarity = 0.75, limit = 1000 }) {
     count: byPassport.size,
     passports: [...byPassport.values()],
   }
+}
+
+// Base-wide aggregates + a query-independent content sample. These ground
+// population-scope synthesis for overview/aggregate questions ("how many
+// customers", "what are people interested in") that map to no semantic cohort.
+export async function populationStats() {
+  return store.populationStats()
+}
+
+export async function sampleContent(args = {}) {
+  return store.sampleContent(args)
 }

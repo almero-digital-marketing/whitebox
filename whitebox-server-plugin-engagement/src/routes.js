@@ -4,6 +4,7 @@
 // auth-gated admin endpoints for inspecting / invalidating the content cache.
 
 import express from 'express'
+import { parsePage, page } from 'whitebox-server/pagination'
 import { batchSchema } from './events.js'
 
 export function mountRoutes(app, { db, content, dispatchBatchEvent, requireAuth }) {
@@ -26,10 +27,12 @@ export function mountRoutes(app, { db, content, dispatchBatchEvent, requireAuth 
 
   // Admin — content cache inspection + invalidation.
   router.get('/content', requireAuth, async (req, res) => {
+    const { limit, offset } = parsePage(req.query, { defaultLimit: 100, maxLimit: 500 })
     const rows = await db('whitebox_engagement_content')
       .orderBy('generated_at', 'desc')
-      .limit(parseInt(req.query.limit, 10) || 100)
-    res.json(rows)
+      .offset(offset)
+      .limit(limit + 1)   // one extra → has_more
+    res.json(page(rows, { limit, offset }))
   })
 
   router.get('/content/:url(*)', requireAuth, async (req, res) => {

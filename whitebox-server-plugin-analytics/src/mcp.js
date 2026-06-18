@@ -6,13 +6,12 @@
 // retrieval primitives the HTTP /analytics endpoints expose — but with
 // the tool descriptions and JSON Schema tuned for LLM consumption.
 //
-// `whitebox.ask` shares its implementation with the HTTP /ask endpoint
-// via runAsk(), so the synthesis behaviour stays in lockstep.
+// `whitebox.ask` delegates to the core awareness.ask primitive — the same call
+// the HTTP /ask endpoint makes — so the synthesis behaviour stays in lockstep.
 
 import { z } from 'zod'
-import { runAsk } from './ask.js'
 
-export function registerMcp(ctx, { awareness, openai, context }) {
+export function registerMcp(ctx, { awareness, context }) {
   if (!ctx.mcp) return
 
   ctx.mcp.tool({
@@ -24,7 +23,21 @@ export function registerMcp(ctx, { awareness, openai, context }) {
       limit:       z.number().int().positive().max(50).optional(),
     },
     handler: async (args) => {
-      const result = await runAsk(args, { awareness, openai, context })
+      const result = await awareness.ask(args)
+      return { content: [{ type: 'text', text: result.answer }] }
+    },
+  })
+
+  ctx.mcp.tool({
+    name: 'whitebox.ask_population',
+    description: 'Answer a natural-language question about the WHOLE customer base (or a semantic cohort within it) — not one customer, so no passport_id. Grounds the answer in content matching the question across all passports, weighted by how many distinct customers each piece reached, plus the cohort size. Use for "what are customers asking about?", "how many people heard about X?", "what is the most common objection?". For a single customer, use whitebox.ask instead.',
+    inputSchema: {
+      question:   z.string().min(1),
+      similarity: z.number().min(0).max(1).optional(),
+      limit:      z.number().int().positive().max(10000).optional(),
+    },
+    handler: async (args) => {
+      const result = await awareness.askPopulation(args)
       return { content: [{ type: 'text', text: result.answer }] }
     },
   })
@@ -33,23 +46,25 @@ export function registerMcp(ctx, { awareness, openai, context }) {
     name: 'whitebox.recall',
     description: 'Per-passport semantic search. Returns the top-K content chunks (mail bodies, web reads, call transcripts, CRM notes) most relevant to a query, ranked by vector similarity. Each hit includes channel, direction, timestamp, and UTM attribution when available.',
     inputSchema: {
-      passport_id: z.string().uuid(),
-      query:       z.string().min(1),
-      limit:       z.number().int().positive().max(100).optional(),
+      passport_id:    z.string().uuid(),
+      query:          z.string().min(1),
+      limit:          z.number().int().positive().max(100).optional(),
+      min_similarity: z.number().min(0).max(1).optional(),
     },
-    handler: async ({ passport_id, query, limit = 10 }) => {
-      const hits = await awareness.recall({ passport_id, query, limit })
+    handler: async ({ passport_id, query, limit = 10, min_similarity = 0 }) => {
+      const hits = await awareness.recall({ passport_id, query, limit, min_similarity })
       return { content: [{ type: 'text', text: JSON.stringify(hits, null, 2) }] }
     },
   })
 
   ctx.mcp.tool({
     name: 'whitebox.population',
-    description: 'Cohort awareness — how many distinct customers have content matching a concept, above a similarity threshold. Useful for "how many people have we told about X?" style questions.',
+    description: 'Cohort awareness — how many distinct customers have content matching a concept, above a similarity threshold. Useful for "how many people have we told about X?" style questions. Pass min_engagement (0–1) to require genuine reading depth on web content (e.g. 0.15 excludes skimmed headings); non-web channels always qualify.',
     inputSchema: {
-      query:      z.string().min(1),
-      similarity: z.number().min(0).max(1).optional(),
-      limit:      z.number().int().positive().max(10000).optional(),
+      query:          z.string().min(1),
+      similarity:     z.number().min(0).max(1).optional(),
+      limit:          z.number().int().positive().max(10000).optional(),
+      min_engagement: z.number().min(0).max(1).optional(),
     },
     handler: async (args) => {
       const result = await awareness.population(args)

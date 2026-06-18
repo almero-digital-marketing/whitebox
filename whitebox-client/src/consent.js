@@ -55,6 +55,14 @@ export default function createConsent({ emitter, required = [] } = {}) {
     return !!read()[category]
   }
 
+  // Has the user made an explicit choice about this category — granted OR denied?
+  // `has()` is false for both "denied" and "never asked"; this tells them apart,
+  // so UI can show a consent prompt only until it's been answered (and not
+  // re-prompt on every reload, since the choice persists).
+  function decided(category) {
+    return category in read()
+  }
+
   function allGranted() {
     return required.every(c => has(c))
   }
@@ -64,5 +72,5 @@ export default function createConsent({ emitter, required = [] } = {}) {
     memory = null
   }
 
-  return { grant, revoke, has, allGranted, clear, required }
+  return { grant, revoke, has, decided, allGranted, clear, required }
 }

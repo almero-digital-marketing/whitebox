@@ -22,48 +22,56 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const DEFAULT_REPLAY_WINDOW_MS = 5 * 60 * 1000
 
-export default {
-  name: 'mail',
+// Factory: mail({ company, mailgun: { apiKey, domain, webhookSigningKey }, auth: { secret } }).
+export function mail(options = {}) {
+  return {
+    name: 'mail',
 
-  async migrate(db) {
-    await db.migrate.latest({
-      directory: path.join(__dirname, 'migrations'),
-      tableName: 'whitebox_mail_migrations',
-    })
-  },
+    async migrate(db) {
+      await db.migrate.latest({
+        directory: path.join(__dirname, 'migrations'),
+        tableName: 'whitebox_mail_migrations',
+      })
+    },
 
-  async register(app, ctx) {
-    const { config, db, queue: q, events, webhooks, passports, sessions, templates, awareness, logger: rootLogger } = ctx
-    const logger = rootLogger.child({ plugin: 'mail' })
-    const mailConfig = config.mail
+    async register(app, ctx) {
+      const { db, queue: q, events, webhooks, passports, sessions, templates, awareness, logger: rootLogger } = ctx
+      const logger = rootLogger.child({ component: 'mail' })
+      const mailConfig = options
+      // Sub-module inits (mailer/outbox/inbox) read `config.mail`; give them a local
+      // config with this plugin's options as the mail block so they stay unchanged.
+      const config = { ...ctx.config, mail: mailConfig }
 
-    const attachmentsFolder = mailConfig.attachmentsFolder
-    await mkdir(attachmentsFolder, { recursive: true })
+      // Resolve relative to cwd with a default (like voip's recordsFolder) so mkdir
+      // never gets undefined when attachmentsFolder is omitted.
+      const attachmentsFolder = path.resolve(process.cwd(), mailConfig.attachmentsFolder || 'mail-attachments')
+      await mkdir(attachmentsFolder, { recursive: true })
 
-    const { notify }  = createNotify({ webhooksConfig: mailConfig.webhooks, events, webhooks })
-    const requireAuth = createAuth({ secret: mailConfig.auth?.secret, logger })
+      const { notify }  = createNotify({ webhooksConfig: mailConfig.webhooks, events, webhooks })
+      const requireAuth = createAuth({ secret: mailConfig.auth?.secret, logger })
 
-    // Singleton modules: capture deps once via init(), in dependency order.
-    // Leaf modules first (no cross-module deps), then modules that import them.
-    attachments.init({ folder: attachmentsFolder, baseUrl: '/mail/attachments' })
-    mailer.init({ config })
-    signature.init({
-      webhookSigningKey: mailConfig.mailgun.webhookSigningKey,
-      replayWindowMs:    mailConfig.webhookReplayWindowMs ?? DEFAULT_REPLAY_WINDOW_MS,
-      logger,
-    })
-    suppressions.init({ db, logger })
-    invalid.init({ db, logger })
+      // Singleton modules: capture deps once via init(), in dependency order.
+      // Leaf modules first (no cross-module deps), then modules that import them.
+      attachments.init({ folder: attachmentsFolder, baseUrl: '/mail/attachments' })
+      mailer.init({ config })
+      signature.init({
+        webhookSigningKey: mailConfig.mailgun.webhookSigningKey,
+        replayWindowMs:    mailConfig.webhookReplayWindowMs ?? DEFAULT_REPLAY_WINDOW_MS,
+        logger,
+      })
+      suppressions.init({ db, logger })
+      invalid.init({ db, logger })
 
-    outbox.init({ db, q, templates, passports, sessions, awareness, notify, config, logger })
-    inbox.init({ config, db, q, passports, sessions, awareness, notify, logger })
-    tracking.init({ notify, awareness, logger })
-    bulk.init({ notify, logger })
+      outbox.init({ db, q, templates, passports, sessions, awareness, notify, config, logger })
+      inbox.init({ config, db, q, passports, sessions, awareness, notify, logger })
+      tracking.init({ notify, awareness, logger })
+      bulk.init({ notify, logger })
 
-    mountRoutes(app, { attachmentsFolder, requireAuth })
-    registerMcp(ctx, { db })
-    startStuckReaper(mailConfig, logger)
+      mountRoutes(app, { attachmentsFolder, requireAuth })
+      registerMcp(ctx, { db })
+      startStuckReaper(mailConfig, logger)
 
-    logger.info('Mail plugin ready')
-  },
+      logger.info('Mail plugin ready')
+    },
+  }
 }

@@ -4,6 +4,7 @@
 
 import express from 'express'
 import { z } from 'zod'
+import { parsePage, page } from 'whitebox-server/pagination'
 
 // Customer block — shared between records and facts. At least one of
 // email / phone / external_id must resolve to an identity at ingest time,
@@ -50,6 +51,20 @@ const factsRequestSchema = z.object({
   facts:    z.array(factSchema).min(1),
 })
 
+// Client-reported observations (browser SDK). Passport-scoped, low-trust — no
+// customer block (identity is the current passport), no bearer secret.
+const observationSchema = z.object({
+  id:   z.union([z.string(), z.number()]),
+  kind: z.string().min(1).max(64),
+  body: z.string().min(1),
+  ts:   z.string().datetime().optional(),
+  meta: z.record(z.any()).optional(),
+})
+
+export const observeSchema = z.object({
+  observations: z.array(observationSchema).min(1),
+})
+
 export function mountRoutes(app, { requireAuth, records, ingest, logger }) {
   const router = express.Router()
 
@@ -83,14 +98,34 @@ export function mountRoutes(app, { requireAuth, records, ingest, logger }) {
     }
   })
 
+  // Client-reported observations. NOT bearer-authed — a browser can't hold the
+  // secret. Identity is the explicit passport_id (same trust model as the
+  // engagement events fallback); the socket path in index.js is preferred since
+  // it takes the passport from the authenticated connection. Recorded low-trust.
+  router.post('/observe', async (req, res) => {
+    const parsed = observeSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
+    try {
+      respond(res, await ingest.ingestObservations({
+        passport_id: req.body?.passport_id,
+        observations: parsed.data.observations,
+      }))
+    } catch (err) {
+      logger.error({ err }, 'CRM observe ingest failed')
+      res.status(500).json({ error: 'CRM observe ingest failed' })
+    }
+  })
+
   router.get('/records/:passport_id', requireAuth, async (req, res) => {
     try {
+      const { limit, offset } = parsePage(req.query, { defaultLimit: 50, maxLimit: 500 })
       const rows = await records.listForPassport(req.params.passport_id, {
         source: req.query.source,
         kind:   req.query.kind,
-        limit:  req.query.limit ? Math.min(Number(req.query.limit), 500) : undefined,
+        limit:  limit + 1,   // one extra → has_more without a COUNT
+        offset,
       })
-      res.json(rows)
+      res.json(page(rows, { limit, offset }))
     } catch (err) {
       logger.error({ err }, 'CRM records listing failed')
       res.status(500).json({ error: 'CRM records listing failed' })

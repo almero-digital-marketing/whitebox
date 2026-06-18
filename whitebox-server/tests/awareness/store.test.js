@@ -164,7 +164,9 @@ function makeDb() {
     // exposure for the passport, then one row per chunk of those hashes.
     if (sql.includes('DISTINCT ON (content_hash)')) {
       const passportId = params[1]
-      const limit = params[params.length - 1]
+      // params tail is now [..., limit, offset] (LIMIT ? OFFSET ?)
+      const offset = params[params.length - 1] || 0
+      const limit = params[params.length - 2]
 
       const byHash = new Map()  // content_hash → most-recent exposure
       for (const e of stores.whitebox_awareness_exposures) {
@@ -198,7 +200,7 @@ function makeDb() {
           similarity: 0.9,
         })
       }
-      return { rows: limit != null ? rows.slice(0, limit) : rows }
+      return { rows: limit != null ? rows.slice(offset, offset + limit) : rows.slice(offset) }
     }
 
     // Simulate population CTE: find matching chunks + join exposures + leftJoin sessions

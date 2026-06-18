@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import express from 'express'
-import engagementPlugin from '../src/index.js'
+import { engagement } from '../src/index.js'
 
 // Capture-everything MCP registry stand-in.
 function makeMcpStub() {
@@ -36,15 +36,14 @@ describe('engagement plugin — MCP registration', () => {
   it('registers list/get/invalidate tools and the content resource', async () => {
     const mcp = makeMcpStub()
     const ctx = {
-      config:    { engagement: { auth: { secret: 's' } } },
       db:        dbStub(),
       connect:   { find: vi.fn(), onConnected: vi.fn(), onDisconnected: vi.fn(), onMessage: vi.fn() },
       awareness: { record: vi.fn() },
-      openai:    {},
+      ai:    {},
       mcp,
       logger,
     }
-    await engagementPlugin.register(express(), ctx)
+    await engagement({ auth: { secret: 's' } }).register(express(), ctx)
 
     expect([...mcp.tools.keys()].sort()).toEqual([
       'engagement.get_content',
@@ -61,13 +60,12 @@ describe('engagement plugin — MCP registration', () => {
       { url: 'https://x/b', kind: 'image', generated_at: new Date('2026-05-02'), text: 'caption', segments: null },
     ]
     const ctx = {
-      config: { engagement: { auth: { secret: 's' } } },
       db:     dbStub({ rows }),
       connect:{ find: vi.fn(), onConnected: vi.fn(), onDisconnected: vi.fn(), onMessage: vi.fn() },
       awareness: { record: vi.fn() },
-      openai: {}, mcp, logger,
+      ai: {}, mcp, logger,
     }
-    await engagementPlugin.register(express(), ctx)
+    await engagement({ auth: { secret: 's' } }).register(express(), ctx)
 
     const result = await mcp.tools.get('engagement.list_content').handler({})
     const items = JSON.parse(result.content[0].text)
@@ -79,13 +77,12 @@ describe('engagement plugin — MCP registration', () => {
   it('get_content returns isError when url is unknown', async () => {
     const mcp = makeMcpStub()
     const ctx = {
-      config: { engagement: { auth: { secret: 's' } } },
       db:     dbStub({ rows: [] }),                  // first() will resolve to null
       connect:{ find: vi.fn(), onConnected: vi.fn(), onDisconnected: vi.fn(), onMessage: vi.fn() },
       awareness: { record: vi.fn() },
-      openai: {}, mcp, logger,
+      ai: {}, mcp, logger,
     }
-    await engagementPlugin.register(express(), ctx)
+    await engagement({ auth: { secret: 's' } }).register(express(), ctx)
 
     const result = await mcp.tools.get('engagement.get_content').handler({ url: 'https://nope.example' })
     expect(result.isError).toBe(true)
@@ -94,12 +91,11 @@ describe('engagement plugin — MCP registration', () => {
 
   it('plugin loads cleanly when ctx.mcp is undefined (mcp is optional)', async () => {
     const ctx = {
-      config: { engagement: { auth: { secret: 's' } } },
       db:     dbStub(),
       connect:{ find: vi.fn(), onConnected: vi.fn(), onDisconnected: vi.fn(), onMessage: vi.fn() },
       awareness: { record: vi.fn() },
-      openai: {}, /* mcp absent */ logger,
+      ai: {}, /* mcp absent */ logger,
     }
-    await expect(engagementPlugin.register(express(), ctx)).resolves.not.toThrow()
+    await expect(engagement({ auth: { secret: 's' } }).register(express(), ctx)).resolves.not.toThrow()
   })
 })

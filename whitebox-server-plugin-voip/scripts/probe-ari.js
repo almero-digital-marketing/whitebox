@@ -43,8 +43,13 @@ async function loadConfig() {
     throw new Error(`Couldn't find whitebox.config.js at ${cfgPath}. Set ARI_URL / ARI_USER / ARI_PASS to override.`)
   }
   const mod = await import(cfgPath)
-  const cfg = mod.default ?? mod
-  const voip = cfg.voip || {}
+  // The config default is an `async (runtime) => ({...})` factory; resolve it.
+  // A plain object is still accepted for back-compat.
+  const exported = mod.default ?? mod
+  const cfg = typeof exported === 'function' ? await exported({}) : exported
+  // Plugins are built objects in cfg.plugins now (voip({...}) → { name, options, ... }),
+  // so the voip block lives on the voip plugin's `options`, not at cfg.voip.
+  const voip = cfg.plugins?.find(p => p?.name === 'voip')?.options || cfg.voip || {}
 
   // ARI is almost always on a different port than the recordings HTTP server.
   // Default Asterisk mod_http port is 8088. We try a few candidate URLs in

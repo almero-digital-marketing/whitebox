@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import express from 'express'
-import crmPlugin from '../src/index.js'
+import { crm } from '../src/index.js'
 
 describe('crm plugin — context registration', () => {
   it('registers a "crm" provider that returns records for a passport', async () => {
@@ -33,7 +33,6 @@ describe('crm plugin — context registration', () => {
     const db = vi.fn(() => ({ where }))
 
     const ctx = {
-      config: { crm: { auth: { secret: 's' } } },
       db,
       passports: { findByIdentity: vi.fn() },
       awareness: { record: vi.fn() },
@@ -41,7 +40,7 @@ describe('crm plugin — context registration', () => {
       logger: { child: () => ctx.logger, info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     }
 
-    await crmPlugin.register(express(), ctx)
+    await crm({ auth: { secret: 's' } }).register(express(), ctx)
 
     expect(context.register).toHaveBeenCalledWith('crm', expect.any(Function))
     const provider = providers.get('crm')
@@ -60,7 +59,6 @@ describe('crm plugin — context registration', () => {
 
   it('does not throw when context is absent (plugin works without registry)', async () => {
     const ctx = {
-      config: { crm: { auth: { secret: 's' } } },
       db: vi.fn(() => ({
         where: () => {
           const c = { orderBy() { return c }, limit() { return c }, offset() { return Promise.resolve([]) }, andWhere() { return c } }
@@ -72,6 +70,6 @@ describe('crm plugin — context registration', () => {
       // context: undefined  ← intentionally missing
       logger: { child() { return this }, info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     }
-    await expect(crmPlugin.register(express(), ctx)).resolves.not.toThrow()
+    await expect(crm({ auth: { secret: 's' } }).register(express(), ctx)).resolves.not.toThrow()
   })
 })

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import express from 'express'
-import mailPlugin from '../src/index.js'
+import { mail } from '../src/index.js'
 
 function makeMcpStub() {
   const tools = new Map(), resources = new Map()
@@ -34,21 +34,23 @@ function dbStub({ rows = [] } = {}) {
 
 const logger = { child() { return this }, info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
 
-// Stand-ins for every ctx field the mail plugin reads
-function makeCtx({ mcp, db, configOverrides = {} } = {}) {
+// The mail plugin options — passed to the factory, mail(mailConfig()).
+function mailConfig(overrides = {}) {
   return {
-    config: {
-      mail: {
-        attachmentsFolder: '/tmp/wb-mail-test',
-        company: 'info@test',
-        mailgun: { apiKey: 'k', domain: 'mail.test', webhookSigningKey: 's' },
-        webhookReplayWindowMs: 60_000,
-        webhooks: [],
-        auth: { secret: 's' },
-        outbox: { stuckCheckIntervalMs: 0 },                              // disable reaper timer
-        ...configOverrides,
-      },
-    },
+    attachmentsFolder: '/tmp/wb-mail-test',
+    company: 'info@test',
+    mailgun: { apiKey: 'k', domain: 'mail.test', webhookSigningKey: 's' },
+    webhookReplayWindowMs: 60_000,
+    webhooks: [],
+    auth: { secret: 's' },
+    outbox: { stuckCheckIntervalMs: 0 },                                  // disable reaper timer
+    ...overrides,
+  }
+}
+
+// Stand-ins for every ctx field the mail plugin reads
+function makeCtx({ mcp, db } = {}) {
+  return {
     db: db || dbStub(),
     queue: {
       createQueue:  () => ({ add: vi.fn(async () => {}) }),
@@ -68,7 +70,7 @@ function makeCtx({ mcp, db, configOverrides = {} } = {}) {
 describe('mail plugin — MCP registration', () => {
   it('registers the expected tools and one resource', async () => {
     const mcp = makeMcpStub()
-    await mailPlugin.register(express(), makeCtx({ mcp }))
+    await mail(mailConfig()).register(express(), makeCtx({ mcp }))
     expect([...mcp.tools.keys()].sort()).toEqual([
       'mail.inbox_get',
       'mail.inbox_list',
@@ -82,7 +84,7 @@ describe('mail plugin — MCP registration', () => {
 
   it('inbox_get returns isError when id is unknown', async () => {
     const mcp = makeMcpStub()
-    await mailPlugin.register(express(), makeCtx({ mcp, db: dbStub({ rows: [] }) }))
+    await mail(mailConfig()).register(express(), makeCtx({ mcp, db: dbStub({ rows: [] }) }))
     const result = await mcp.tools.get('mail.inbox_get').handler({ id: 9999 })
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('No inbox row')
@@ -94,7 +96,7 @@ describe('mail plugin — MCP registration', () => {
       { id: 2, from: 'b@x', subject: 'Re: x', source: 'inbound', received_at: new Date('2026-05-02'), passport_id: 'p2' },
       { id: 1, from: 'a@x', subject: 'Hi',    source: 'form',    received_at: new Date('2026-05-01'), passport_id: 'p1' },
     ]
-    await mailPlugin.register(express(), makeCtx({ mcp, db: dbStub({ rows }) }))
+    await mail(mailConfig()).register(express(), makeCtx({ mcp, db: dbStub({ rows }) }))
     const result = await mcp.tools.get('mail.inbox_list').handler({})
     const items = JSON.parse(result.content[0].text)
     expect(items).toHaveLength(2)
@@ -102,6 +104,6 @@ describe('mail plugin — MCP registration', () => {
   })
 
   it('plugin loads cleanly when ctx.mcp is undefined', async () => {
-    await expect(mailPlugin.register(express(), makeCtx({}))).resolves.not.toThrow()
+    await expect(mail(mailConfig()).register(express(), makeCtx({}))).resolves.not.toThrow()
   })
 })

@@ -173,3 +173,43 @@ export async function ingestFacts({ source, customer, facts: incoming = [] }) {
     facts: { accepted, dropped: incoming.length - accepted },
   }
 }
+
+// Client-reported observations (browser SDK via whitebox-client-plugin-crm).
+// The passport is ALREADY known — from the authenticated socket connection or
+// an explicit passport_id — so there's no customer/identity block to resolve.
+// These are LOW-TRUST: things the client app witnessed in the UI, not
+// authoritative state. Recorded as awareness observations tagged source='client'
+// so downstream (ask, audiences) can weigh them as self-reported. Authoritative
+// state must still come through ingestRecords (the bearer-authed webhook).
+export async function ingestObservations({ passport_id, source = 'client', observations = [] }) {
+  if (!passport_id) {
+    return { reason: 'no_identity', observations: { accepted: 0, dropped: observations.length } }
+  }
+  if (!Array.isArray(observations) || !observations.length) {
+    return { passport_id, observations: { accepted: 0, dropped: 0 } }
+  }
+
+  let accepted = 0
+  for (const o of observations) {
+    if (!o?.body) continue
+    try {
+      await awareness.record({
+        passport_id,
+        session_id: null,
+        ts: o.ts ? new Date(o.ts) : new Date(),
+        channel: 'crm',
+        direction: 'observation',
+        source,
+        content_id: `${source}:obs:${o.kind}:${o.id}`,
+        text: o.body,
+        meta: { kind: o.kind, client: true, ...(o.meta || {}) },
+      })
+      accepted++
+    } catch (err) {
+      logger.warn({ err, obs: { id: o.id, kind: o.kind } },
+        'awareness.record failed for client observation')
+    }
+  }
+
+  return { passport_id, observations: { accepted, dropped: observations.length - accepted } }
+}

@@ -58,6 +58,15 @@ const videoSchema = z.object({
   message: 'Either src or url must be provided',
 })
 
+// Link click — a strong intent signal. `text` is the resolved label (anchor
+// text or the data-wb-link override); `href` is where it pointed.
+const linkSchema = z.object({
+  id:   z.string().optional().nullable(),
+  text: z.string().min(1),
+  href: z.string().optional().nullable(),
+  ts:   z.union([z.string(), z.number()]).optional(),
+})
+
 const imageSchema = z.object({
   id:          z.string().optional().nullable(),
   kind:        z.literal('image').optional(),
@@ -86,15 +95,17 @@ export const KIND_BY_TYPE = {
   'engagement.text':    'text',
   'engagement.video':   'video',
   'engagement.image':   'image',
+  'engagement.link':    'link',
 }
 
-export function createDispatch({ sections, text, videos, images, logger }) {
+export function createDispatch({ sections, text, videos, images, links, logger }) {
   function parse(kind, payload) {
     try {
       if (kind === 'section') return sectionSchema.parse(payload)
       if (kind === 'text')    return textSchema.parse(payload)
       if (kind === 'video')   return videoSchema.parse(payload)
       if (kind === 'image')   return imageSchema.parse(payload)
+      if (kind === 'link')    return linkSchema.parse(payload)
     } catch (err) {
       logger.warn({ err, kind }, 'engagement payload validation failed')
       return null
@@ -108,6 +119,7 @@ export function createDispatch({ sections, text, videos, images, logger }) {
     if (kind === 'text')    return text.consume(visitor, parsed)
     if (kind === 'video')   return videos.consume(visitor, parsed)
     if (kind === 'image')   return images.consume(visitor, parsed)
+    if (kind === 'link')    return links.consume(visitor, parsed)
   }
 
   // Each batched event is either a flat `{ type: 'engagement.X', ...fields }`

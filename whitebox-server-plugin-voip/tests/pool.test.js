@@ -333,3 +333,18 @@ describe('phonebook.format()', () => {
     expect(phonebook.format('not-a-number')).toBe('not-a-number')
   })
 })
+
+describe('phonebook.normalizeLines (config reconciliation)', () => {
+  it('passes a { tag: [numbers] } map through unchanged', () => {
+    expect(phonebook.normalizeLines({ sales: ['+1'], support: ['+2'] }))
+      .toEqual({ sales: ['+1'], support: ['+2'] })
+  })
+
+  it('normalizes the array-of-line-objects config to a { tag: in[] } map', () => {
+    const map = phonebook.normalizeLines([
+      { tag: 'demo', prefix: '999', in: ['+15555550100', '+15555550101'], out: ['+1'], strategy: 'hunt' },
+      { tag: 'sofia', in: ['+359000'] },
+    ])
+    expect(map).toEqual({ demo: ['+15555550100', '+15555550101'], sofia: ['+359000'] })
+  })
+})

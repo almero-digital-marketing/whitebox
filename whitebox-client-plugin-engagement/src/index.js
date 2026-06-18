@@ -4,6 +4,7 @@
 import createText from './text.js'
 import createImage from './image.js'
 import createVideo from './video.js'
+import createLink from './link.js'
 
 const DEFAULT_FLUSH_INTERVAL_MS = 5000
 const DEFAULT_BATCH_SIZE = 10
@@ -20,6 +21,7 @@ export default function engagementPlugin(localOptions = {}) {
       let textTracker = null
       let imageTracker = null
       let videoTracker = null
+      let linkTracker = null
 
       function enqueue(event) {
         buffer.push(event)
@@ -71,8 +73,9 @@ export default function engagementPlugin(localOptions = {}) {
               ts: new Date().toISOString(),
               id, kind, level, text: chunk, length_chars, ms_spent, url, partial,
             })
-            emitter.emit('engagement.text', { id, kind, level, length_chars, ms_spent, partial })
+            emitter.emit('engagement.text', { id, kind, level, text: chunk, length_chars, ms_spent, url, partial })
           },
+          onProgress: (p) => emitter.emit('engagement.progress', { kind: 'text', ...p }),
         })
         if (typeof window !== 'undefined') queue(async () => textTracker.start())
       }
@@ -88,8 +91,9 @@ export default function engagementPlugin(localOptions = {}) {
               ts: new Date().toISOString(),
               id, kind, src, alt, width, height, ms_spent, url, partial,
             })
-            emitter.emit('engagement.image', { id, src, alt, ms_spent, partial })
+            emitter.emit('engagement.image', { id, kind, src, alt, width, height, ms_spent, url, partial })
           },
+          onProgress: (p) => emitter.emit('engagement.progress', { kind: 'image', ...p }),
         })
         if (typeof window !== 'undefined') queue(async () => imageTracker.start())
       }
@@ -106,16 +110,31 @@ export default function engagementPlugin(localOptions = {}) {
               id, kind, src, duration_s, intervals,
               total_watched_s, completion_pct, ms_spent, url, muted, partial,
             })
-            emitter.emit('engagement.video', { id, src, duration_s, total_watched_s, completion_pct, partial })
+            emitter.emit('engagement.video', { id, kind, src, duration_s, intervals, total_watched_s, completion_pct, ms_spent, url, muted, partial })
           },
         })
         if (typeof window !== 'undefined') queue(async () => videoTracker.start())
+      }
+
+      // --- Link-click tracking (strong intent signal) ---
+      const linkOptions = options.link === false ? null : (options.link ?? {})
+      if (linkOptions && linkOptions.enabled !== false) {
+        linkTracker = createLink({
+          options: linkOptions,
+          onClick: ({ id, text, href }) => {
+            enqueue({ type: 'engagement.link', ts: new Date().toISOString(), id, text, href })
+            flush()   // a click may navigate away — send promptly rather than waiting on the timer
+            emitter.emit('engagement.link', { id, text, href })
+          },
+        })
+        if (typeof window !== 'undefined') queue(async () => linkTracker.start())
       }
 
       function stop() {
         textTracker?.stop()
         imageTracker?.stop()
         videoTracker?.stop()
+        linkTracker?.stop()
         if (flushTimer) clearTimeout(flushTimer)
       }
 
@@ -124,6 +143,7 @@ export default function engagementPlugin(localOptions = {}) {
         text: textTracker,
         image: imageTracker,
         video: videoTracker,
+        link: linkTracker,
       })
     },
   }

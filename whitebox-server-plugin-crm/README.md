@@ -100,8 +100,8 @@ Two design rules keep it small:
 Either via `/analytics/ask` (which pulls structured CRM context automatically alongside semantic evidence), or directly:
 
 ```
-GET /crm/records/:passport_id?source=booking&kind=reservation
-GET /analytics/context/:passport_id?provider=crm&page=1&page_size=20
+GET /crm/records/:passport_id?source=booking&kind=reservation&limit=50&offset=0
+GET /analytics/context/:passport_id?provider=crm&limit=20&offset=0
 ```
 
 ## Design in one breath
@@ -280,7 +280,7 @@ The fact with `ref` is attached to the reservation (awareness `meta.record_id` i
 
 Read records back for a known passport. Useful for admin tools.
 
-Query params: `source`, `kind`, `limit` (max 500). Ordered by `starts_at` desc.
+Query params: `source`, `kind`, `limit` (default 50, max 500), `offset`. Ordered by `starts_at` desc. Returns the standard `{ data, limit, offset, has_more }` pagination envelope.
 
 ```bash
 curl -H "Authorization: Bearer $WHITEBOX_TOKEN" \

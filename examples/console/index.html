@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhiteBox · console</title>
+<style>
+  :root { --fg:#1c2530; --mut:#6b7785; --line:#e4e8ee; --accent:#2f9e95; --bg:#fafbfc; --brand:#3b5bdb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif; color:var(--fg); background:var(--bg); }
+  header { position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; gap:.6rem; align-items:center;
+           padding:.7rem 1.1rem; background:#fff; border-bottom:1px solid var(--line); }
+  header b { color:var(--brand); font-weight:800; }
+  header .hint { color:var(--mut); font-size:.85rem; }
+  header .sp { flex:1; }
+  input, textarea, button { font:inherit; }
+  .fld { padding:.4rem .6rem; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  #token { width:170px; font:12px ui-monospace,monospace; }
+  main { max-width:920px; margin:0 auto; padding:1.2rem 1.1rem 4rem; }
+  .tabs { display:flex; gap:.2rem; margin-bottom:1rem; border-bottom:1px solid var(--line); }
+  .tab { font:inherit; cursor:pointer; border:0; background:none; padding:.55rem .9rem; color:var(--mut);
+         font-weight:600; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .tab:hover { color:var(--fg); }
+  .tab.active { color:var(--brand); border-bottom-color:var(--brand); }
+  .tabpanel { display:none; } .tabpanel.active { display:block; }
+  .prow { margin-bottom:.8rem; }
+  #passport { width:100%; font:12px ui-monospace,monospace; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:12px; padding:1rem 1.1rem; margin-bottom:1rem; }
+  .ptitle { font-weight:700; font-size:.95rem; margin-bottom:.7rem; display:flex; align-items:baseline; gap:.5rem; }
+  .ptitle .psub { font-weight:400; font-size:.8rem; color:var(--mut); }
+  .chips { display:flex; flex-wrap:wrap; gap:.45rem; margin-bottom:.8rem; }
+  .chip { cursor:pointer; border:1px solid var(--line); background:#f3f6f9; color:var(--fg);
+          border-radius:999px; padding:.35rem .7rem; font-size:.82rem; }
+  .chip:hover { background:#e9eef4; border-color:#cdd5dd; }
+  .askrow { display:flex; gap:.5rem; }
+  #q { flex:1; }
+  .go { background:var(--brand); color:#fff; border:0; border-radius:8px; padding:.45rem 1rem; cursor:pointer; font-weight:600; }
+  .go:hover { background:#314fc4; }
+  .tools { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin-top:.7rem; padding-top:.7rem; border-top:1px dashed var(--line); }
+  .tools .lbl { font-size:.75rem; color:var(--mut); text-transform:uppercase; letter-spacing:.05em; margin-right:.2rem; }
+  .tools button { border:1px solid var(--line); background:#f6f8fa; border-radius:8px; padding:.35rem .65rem; cursor:pointer; font-size:.82rem; }
+  .tools button:hover { background:#eef2f5; }
+  .tools input { width:150px; font-size:.82rem; }
+  .exchips { display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; }
+  .exchips .exlbl { font-size:.72rem; color:var(--mut); }
+  .exchip { cursor:pointer; border:1px dashed #cdd5dd; background:#fff; color:var(--mut); border-radius:999px; padding:.18rem .55rem; font-size:.76rem; }
+  .exchip:hover { background:#f3f6f9; color:var(--fg); border-color:#aab4bf; }
+  #out > div { background:#fff; border:1px solid var(--line); border-radius:12px; padding:.9rem 1rem; margin-bottom:.8rem; }
+  .qline { font-weight:600; margin-bottom:.45rem; }
+  .qline .badge { font:11px ui-monospace,monospace; color:#fff; background:var(--accent); border-radius:6px; padding:.1rem .4rem; margin-right:.5rem; text-transform:uppercase; }
+  .qline.tool .badge { background:var(--brand); } .qline.err .badge { background:#c0392b; } .qline.all .badge { background:#7048e8; }
+  .answer { white-space:pre-wrap; }
+  .stat { color:var(--mut); font-size:.82rem; margin:-.15rem 0 .5rem; }
+  details { margin-top:.5rem; } details > summary { cursor:pointer; color:var(--mut); font-size:.85rem; }
+  pre { background:#f6f8fa; border-radius:8px; padding:.6rem .7rem; overflow:auto; max-height:340px; font:12px/1.5 ui-monospace,monospace; white-space:pre-wrap; }
+  .ev { border-left:2px solid var(--line); padding:.2rem 0 .2rem .7rem; margin:.4rem 0; font-size:.86rem; }
+  .ev .meta { color:var(--mut); font:11px ui-monospace,monospace; }
+  .spin { color:var(--mut); font-style:italic; }
+</style>
+</head>
+<body>
+<header>
+  <b>WhiteBox</b> <span class="hint">console</span>
+  <span class="sp"></span>
+  <input id="token" class="fld" type="password" placeholder="analytics token">
+  <span class="hint" id="srvhint">…</span>
+</header>
+
+<main>
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="all" role="tab">All customers</button>
+    <button class="tab" data-tab="one" role="tab">This customer</button>
+  </div>
+
+  <section class="tabpanel active" id="tab-all" role="tabpanel">
+    <div class="panel">
+      <div class="ptitle">All customers <span class="psub">grounded over your whole base — no passport needed</span></div>
+      <div class="chips" id="popchips"></div>
+      <div class="askrow">
+        <input id="popaskq" class="fld" placeholder="Ask about your whole customer base…">
+        <button class="go" id="askpop">Ask all</button>
+      </div>
+      <div class="tools">
+        <span class="lbl">cohort size</span>
+        <input id="cohortq" class="fld" placeholder="cohort concept…">
+        <button data-tool="population">Count</button>
+        <span class="exchips" id="cohortex"><span class="exlbl">e.g.</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="tabpanel" id="tab-one" role="tabpanel">
+    <div class="panel">
+      <div class="ptitle">This customer <span class="psub">grounded over one passport</span></div>
+      <div class="prow">
+        <input id="passport" class="fld" placeholder="passport id (paste from the integration demo header)">
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="askrow">
+        <input id="q" class="fld" placeholder="Ask a grounded question about this customer…">
+        <button class="go" id="ask">Ask</button>
+      </div>
+      <div class="tools">
+        <span class="lbl">inspect</span>
+        <button data-tool="timeline">Timeline</button>
+        <button data-tool="context">Context (CRM state)</button>
+      </div>
+      <div class="tools">
+        <span class="lbl">recall</span>
+        <input id="recallq" class="fld" placeholder="recall query…">
+        <button data-tool="recall">Recall</button>
+        <span class="exchips" id="recallex"><span class="exlbl">e.g.</span></span>
+      </div>
+    </div>
+  </section>
+
+  <div id="out"></div>
+</main>
+
+<script type="module" src="/main.js"></script>
+</body>
+</html>

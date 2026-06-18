@@ -15,6 +15,9 @@
   "scripts": {
     "test": "vitest run"
   },
+  "dependencies": {
+    "whitebox-adnetworks": "^0.1.0"
+  },
   "peerDependencies": {
     "whitebox-client": "^0.2.0"
   },

@@ -14,7 +14,7 @@ let pool = {}
 let slots = null
 
 export function init(deps) {
-  lines = deps.config.voip.lines
+  lines = phonebook.normalizeLines(deps.config.voip.lines)
   connect = deps.connect
   notify = deps.notify
   logger = deps.logger
@@ -26,6 +26,20 @@ export function init(deps) {
   connect.onConnected(onConnected)
   connect.onDisconnected(onDisconnected)
   connect.onMessage(onMessage)
+}
+
+// Which visitor currently holds this inbound (company) number? Used to attribute
+// an inbound call to a passport without a PBX — the call-ingest webhook resolves
+// the dialed number here. Returns { connectionId, passportId, sessionId, tag } or null.
+export function findByNumber(e164) {
+  for (const entry of Object.values(pool)) {
+    for (const [tag, number] of Object.entries(entry.numbers)) {
+      if (number === e164) {
+        return { connectionId: entry.connectionId, passportId: entry.passportId, sessionId: entry.sessionId, tag }
+      }
+    }
+  }
+  return null
 }
 
 function buildSlots() {

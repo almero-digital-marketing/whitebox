@@ -1,27 +1,18 @@
-import { createRequire } from 'module'
-import { pathToFileURL } from 'url'
 import logger from './logger.js'
 
-const requireFromCwd = createRequire(process.cwd() + '/')
-
-async function resolve(name) {
-  // Plugins ship as separate npm packages named `whitebox-server-plugin-<name>`
-  // and are discovered by walking the consumer's node_modules. With npm
-  // workspaces, sibling packages are symlinked into the root node_modules
-  // automatically, so development and production use the same code path.
-  const pkg = `whitebox-server-plugin-${name}`
-  try {
-    const resolved = requireFromCwd.resolve(pkg)
-    return (await import(pathToFileURL(resolved).href)).default
-  } catch (err) {
-    throw new Error(`Plugin "${name}" not found — install ${pkg} (${err.message})`)
-  }
-}
-
+// Plugins are built in whitebox.config.js — each plugin package exports a named
+// factory (`engagement`, `crm`, …) that is imported there and called with its
+// options, producing a `{ name, register, migrate? }` object. By the time we get
+// here, `ctx.config.plugins` is already an array of those built objects, so the
+// loader just runs each one in order. (No dynamic name → package resolution —
+// the config file's `import` statements are the explicit, checkable manifest.)
 async function load(app, ctx) {
-  for (const name of ctx.config.plugins) {
+  for (const plugin of ctx.config.plugins) {
+    if (!plugin || typeof plugin.register !== 'function') {
+      throw new Error(`Invalid entry in config.plugins — expected a plugin factory result { name, register }, got ${typeof plugin}. Did you forget to call the factory, e.g. engagement({ ... })?`)
+    }
+    const name = plugin.name || '(unnamed)'
     logger.info('Loading plugin: %s', name)
-    const plugin = await resolve(name)
 
     if (plugin.migrate) {
       await plugin.migrate(ctx.db)

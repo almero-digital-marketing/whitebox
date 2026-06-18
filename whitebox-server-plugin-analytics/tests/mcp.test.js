@@ -14,12 +14,13 @@ function makeMcpStub() {
 function makeDeps({ recallHits = [], population = { count: 0, passports: [] }, timeline = [], forgot = 0, answer = 'a', collected = {} } = {}) {
   return {
     awareness: {
-      recall:     vi.fn(async () => recallHits),
-      population: vi.fn(async () => population),
-      timeline:   vi.fn(async () => timeline),
-      forget:     vi.fn(async () => forgot),
+      recall:        vi.fn(async () => recallHits),
+      population:    vi.fn(async () => population),
+      timeline:      vi.fn(async () => timeline),
+      forget:        vi.fn(async () => forgot),
+      ask:           vi.fn(async () => ({ answer, evidence: recallHits, context: collected })),
+      askPopulation: vi.fn(async () => ({ answer, evidence: [], cohort: { count: population.count } })),
     },
-    openai: { prompt: vi.fn(async () => answer) },
     context: {
       collect: vi.fn(async () => collected),
       names:   () => Object.keys(collected),
@@ -30,11 +31,12 @@ function makeDeps({ recallHits = [], population = { count: 0, passports: [] }, t
 const PID = 'a1b2c3d4-5678-4abc-89de-1234567890ab'
 
 describe('analytics plugin — MCP registration', () => {
-  it('registers six whitebox.* tools', () => {
+  it('registers seven whitebox.* tools', () => {
     const mcp = makeMcpStub()
     registerMcp({ mcp }, makeDeps())
     expect([...mcp.tools.keys()].sort()).toEqual([
       'whitebox.ask',
+      'whitebox.ask_population',
       'whitebox.context',
       'whitebox.forget',
       'whitebox.population',
@@ -43,21 +45,35 @@ describe('analytics plugin — MCP registration', () => {
     ])
   })
 
-  it('whitebox.ask returns the synthesized answer text and runs recall + context in parallel', async () => {
+  it('whitebox.ask_population delegates to awareness.askPopulation (no passport) and returns its answer text', async () => {
     const mcp = makeMcpStub()
-    const deps = makeDeps({
-      recallHits: [{ chunk_text: 'Enterprise SSO', ts: new Date('2026-05-01'), channel: 'web', direction: 'exposure' }],
-      collected:  { crm: [{ kind: 'subscription', status: 'active' }] },
-      answer:     'They have an active subscription and have read about SSO.',
+    const deps = makeDeps({ answer: 'Most customers ask about pricing and SSO.', population: { count: 42, passports: [] } })
+    registerMcp({ mcp }, deps)
+
+    const result = await mcp.tools.get('whitebox.ask_population').handler({
+      question: 'What are customers asking about?',
+      similarity: 0.6,
     })
+    expect(deps.awareness.askPopulation).toHaveBeenCalledWith(expect.objectContaining({
+      question: 'What are customers asking about?',
+      similarity: 0.6,
+    }))
+    expect(result.content[0].text).toContain('pricing and SSO')
+  })
+
+  it('whitebox.ask delegates to awareness.ask and returns its answer text', async () => {
+    const mcp = makeMcpStub()
+    const deps = makeDeps({ answer: 'They have an active subscription and have read about SSO.' })
     registerMcp({ mcp }, deps)
 
     const result = await mcp.tools.get('whitebox.ask').handler({
       passport_id: PID,
       question: 'What does this customer have going on?',
     })
-    expect(deps.awareness.recall).toHaveBeenCalled()
-    expect(deps.context.collect).toHaveBeenCalled()
+    expect(deps.awareness.ask).toHaveBeenCalledWith(expect.objectContaining({
+      passport_id: PID,
+      question: 'What does this customer have going on?',
+    }))
     expect(result.content[0].text).toContain('active subscription')
   })
 
@@ -70,7 +86,7 @@ describe('analytics plugin — MCP registration', () => {
     const result = await mcp.tools.get('whitebox.recall').handler({
       passport_id: PID, query: 'pricing', limit: 5,
     })
-    expect(deps.awareness.recall).toHaveBeenCalledWith({ passport_id: PID, query: 'pricing', limit: 5 })
+    expect(deps.awareness.recall).toHaveBeenCalledWith({ passport_id: PID, query: 'pricing', limit: 5, min_similarity: 0 })
     const out = JSON.parse(result.content[0].text)
     expect(out[0].chunk_text).toBe('pricing tier')
   })
@@ -114,7 +130,7 @@ describe('analytics plugin — MCP registration', () => {
 
   it('whitebox.context handles absent context registry gracefully', async () => {
     const mcp = makeMcpStub()
-    registerMcp({ mcp }, { awareness: makeDeps().awareness, openai: makeDeps().openai /* no context */ })
+    registerMcp({ mcp }, { awareness: makeDeps().awareness /* no context */ })
     const result = await mcp.tools.get('whitebox.context').handler({ passport_id: PID })
     const out = JSON.parse(result.content[0].text)
     expect(out).toEqual({ providers: [], context: {} })

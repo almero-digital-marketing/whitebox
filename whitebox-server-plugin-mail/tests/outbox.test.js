@@ -225,3 +225,58 @@ describe('outbox.cancelBatch', () => {
     expect(result.cancelled).toBe(0)
   })
 })
+
+// ── recipient → passport resolution (the dedup fix) ──────────────────────────
+function makeResolve({ existing = null } = {}) {
+  const db = makeDb({ whitebox_mail_outbox: [] })
+  const passports = {
+    findByIdentity: vi.fn(async (type, value) => (existing && type === 'email' && value === existing.value) ? { id: existing.id } : null),
+    identify: vi.fn(async () => 'minted-new'),
+    link: vi.fn(async () => {}),
+  }
+  const q = { createQueue: vi.fn(() => ({ add: vi.fn() })), createWorker: vi.fn(() => ({ on: vi.fn() })) }
+  const logger = { warn: vi.fn(), error: vi.fn() }
+  outbox.init({ db, q, passports, notify: vi.fn(), config: { mail: {} }, logger })
+  return { outbox, db, passports }
+}
+
+describe('outbox.resolveRecipient', () => {
+  it('reuses the existing passport that already owns the email (no duplicate)', async () => {
+    const { outbox, db, passports } = makeResolve({ existing: { id: 'p-jane', value: 'jane@x.com' } })
+    const row = { id: 1, to: 'jane@x.com', passport_id: null }
+    db.store.whitebox_mail_outbox.push(row)
+
+    const id = await outbox.resolveRecipient(row)
+
+    expect(id).toBe('p-jane')
+    expect(passports.findByIdentity).toHaveBeenCalledWith('email', 'jane@x.com')
+    expect(passports.identify).not.toHaveBeenCalled()          // did NOT mint a new one
+    expect(passports.link).toHaveBeenCalledWith('p-jane', [{ type: 'email', name: 'address', value: 'jane@x.com' }])
+    expect(row.passport_id).toBe('p-jane')                     // persisted on the row
+    expect(db.store.whitebox_mail_outbox[0].passport_id).toBe('p-jane')
+  })
+
+  it('mints a new passport only when the email is unknown', async () => {
+    const { outbox, passports } = makeResolve({ existing: null })
+    const row = { id: 2, to: 'new@x.com', passport_id: null }
+
+    const id = await outbox.resolveRecipient(row)
+
+    expect(passports.findByIdentity).toHaveBeenCalledWith('email', 'new@x.com')
+    expect(passports.identify).toHaveBeenCalledWith(null)
+    expect(id).toBe('minted-new')
+    expect(passports.link).toHaveBeenCalledWith('minted-new', [{ type: 'email', name: 'address', value: 'new@x.com' }])
+  })
+
+  it('uses an explicit passport_id and skips the lookup', async () => {
+    const { outbox, passports } = makeResolve({ existing: { id: 'p-other', value: 'k@x.com' } })
+    const row = { id: 3, to: 'k@x.com', passport_id: 'explicit' }
+
+    const id = await outbox.resolveRecipient(row)
+
+    expect(id).toBe('explicit')
+    expect(passports.findByIdentity).not.toHaveBeenCalled()
+    expect(passports.identify).not.toHaveBeenCalled()
+    expect(passports.link).toHaveBeenCalledWith('explicit', [{ type: 'email', name: 'address', value: 'k@x.com' }])
+  })
+})

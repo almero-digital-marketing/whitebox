@@ -21,11 +21,13 @@ export default function createVelocity({ maxVelocity = DEFAULT_MAX_VELOCITY, qui
     if (Math.abs(dy) > 0) lastMoveAt = now
   }
 
-  function isStable() {
+  // maxOverride lets a caller supply a per-element threshold (e.g. scaled by the
+  // element's font size); falls back to the configured maxVelocity.
+  function isStable(maxOverride) {
     if (typeof performance === 'undefined') return true
     const now = performance.now()
     if (now - lastMoveAt >= quietMs) return true
-    return velocity <= maxVelocity
+    return velocity <= (maxOverride != null ? maxOverride : maxVelocity)
   }
 
   function attach() {

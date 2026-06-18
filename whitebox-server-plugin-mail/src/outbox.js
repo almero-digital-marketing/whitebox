@@ -93,12 +93,7 @@ export function init(deps) {
     }
 
     try {
-      const passportId = row.passport_id ?? await passports.identify(null).then(id => id).catch(() => null)
-      if (passportId && row.to) {
-        await passports.link(passportId, [{ type: 'email', name: 'address', value: row.to }]).catch(err => {
-          logger.warn({ err }, 'Failed to link outbox recipient to passport: %s', row.to)
-        })
-      }
+      await resolveRecipient(row)   // resolve + link + persist the passport (mutates row.passport_id)
     } catch (err) {
       logger.warn({ err }, 'Failed to identify/link outbox recipient: %s', row.to)
     }
@@ -300,6 +295,28 @@ export async function sent(id, mailgunId) {
     sent_at: new Date(),
   }).returning('*')
   return row
+}
+
+// Resolve an outbox recipient to a passport and link the email to it. Order:
+// an explicit passport_id, else the existing passport that already owns this
+// email (so we DON'T mint a duplicate per send), else a fresh visitor. The
+// resolved id is persisted onto the row (and mutated in place) so the awareness
+// record on send and open/click tracking — both keyed off row.passport_id —
+// attribute to the right passport. Returns the passport id (or null).
+export async function resolveRecipient(row) {
+  const passportId = row.passport_id
+    ?? (await passports.findByIdentity('email', row.to))?.id
+    ?? await passports.identify(null)
+  if (!passportId || !row.to) return passportId
+
+  await passports.link(passportId, [{ type: 'email', name: 'address', value: row.to }]).catch(err => {
+    logger.warn({ err }, 'Failed to link outbox recipient to passport: %s', row.to)
+  })
+  if (passportId !== row.passport_id) {
+    await db(TABLE).where({ id: row.id }).update({ passport_id: passportId })
+    row.passport_id = passportId
+  }
+  return passportId
 }
 
 export async function failed(id, { reason, attempts, terminal }) {

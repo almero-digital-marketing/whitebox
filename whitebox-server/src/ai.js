@@ -1,10 +1,10 @@
-// LLM facade — backed by the Vercel AI SDK (`ai` + `@ai-sdk/openai`) rather
-// than the OpenAI client directly, so the provider can be swapped later
-// without touching consumers. The public surface (prompt / embed / vision /
-// transcribe / expand) is unchanged; only the engine underneath moved.
+// AI facade — backed by the Vercel AI SDK. The OpenAI provider is the engine
+// today (`@ai-sdk/openai`), but it's isolated in this module so it can be
+// swapped without touching consumers. Consumers inject this as `ai` and call
+// prompt / embed / vision / transcribe / expand — never the provider directly.
 
 import { createOpenAI } from '@ai-sdk/openai'
-import { generateText, embedMany, experimental_transcribe as aiTranscribe } from 'ai'
+import { generateText, generateObject, embedMany, experimental_transcribe as aiTranscribe } from 'ai'
 import { readFile } from 'fs/promises'
 import { encode } from '@toon-format/toon'
 
@@ -17,13 +17,13 @@ const TRANSCRIBE_MODEL = 'whisper-1'
 let provider = null
 
 export async function init(options) {
-  const apiKey = options.config?.openai?.apiKey
+  const apiKey = options.config?.ai?.apiKey
   if (!apiKey) return
   provider = createOpenAI({ apiKey })
 }
 
 export async function prompt(system, user) {
-  if (!provider) throw new Error('OpenAI not configured')
+  if (!provider) throw new Error('AI provider not configured')
   const { text } = await generateText({
     model: provider(CHAT_MODEL),
     system,
@@ -32,8 +32,17 @@ export async function prompt(system, user) {
   return text
 }
 
+// Structured output — the model returns an object validated against `schema`
+// (a Zod schema). Used for classification / verdicts where a parsed JSON shape
+// is needed rather than prose.
+export async function object(system, user, schema) {
+  if (!provider) throw new Error('AI provider not configured')
+  const { object } = await generateObject({ model: provider(CHAT_MODEL), schema, system, prompt: user })
+  return object
+}
+
 export async function embed(texts, { model = EMBED_MODEL } = {}) {
-  if (!provider) throw new Error('OpenAI not configured')
+  if (!provider) throw new Error('AI provider not configured')
   const input = Array.isArray(texts) ? texts : [texts]
   if (!input.length) return []
   const { embeddings } = await embedMany({
@@ -44,7 +53,7 @@ export async function embed(texts, { model = EMBED_MODEL } = {}) {
 }
 
 export async function vision(promptText, imageUrl, { detail = 'low', maxTokens = 200 } = {}) {
-  if (!provider) throw new Error('OpenAI not configured')
+  if (!provider) throw new Error('AI provider not configured')
   const { text } = await generateText({
     model: provider(CHAT_MODEL),
     maxOutputTokens: maxTokens,
@@ -63,19 +72,19 @@ export async function vision(promptText, imageUrl, { detail = 'low', maxTokens =
 // returns { text, duration, segments: [{ start, end, text }] } — the same
 // shape Whisper's verbose output exposed, so consumers don't change.
 export async function transcribe(filePath, { language, prompt, response_format } = {}) {
-  if (!provider) throw new Error('OpenAI not configured')
+  if (!provider) throw new Error('AI provider not configured')
   const audio = await readFile(filePath)
   const verbose = response_format === 'verbose_json'
 
-  const openaiOptions = {}
-  if (language) openaiOptions.language = language
-  if (prompt) openaiOptions.prompt = prompt
-  if (verbose) openaiOptions.timestampGranularities = ['segment']
+  const transcribeOptions = {}
+  if (language) transcribeOptions.language = language
+  if (prompt) transcribeOptions.prompt = prompt
+  if (verbose) transcribeOptions.timestampGranularities = ['segment']
 
   const res = await aiTranscribe({
     model: provider.transcription(TRANSCRIBE_MODEL),
     audio,
-    providerOptions: { openai: openaiOptions },
+    providerOptions: { openai: transcribeOptions },
   })
 
   if (!verbose) return res.text

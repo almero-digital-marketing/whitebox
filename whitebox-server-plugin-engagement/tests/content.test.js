@@ -43,41 +43,41 @@ function makeDb() {
 
 // Re-init the module singleton with fresh deps per test, return the namespace
 // so existing `content.resolveImage()` / `content.sliceVideo()` call sites are unchanged.
-function makeContent({ openai } = {}) {
+function makeContent({ ai } = {}) {
   const db = makeDb()
   const config = { engagement: {} }
   const logger = { warn: vi.fn(), error: vi.fn() }
-  const openaiMock = openai ?? {
+  const openaiMock = ai ?? {
     vision: vi.fn(async () => 'A diagram showing a CI/CD pipeline'),
     transcribe: vi.fn(async () => ({ segments: [{ start: 0, end: 5, text: 'hello world' }], duration: 5 })),
     embed: vi.fn(),
   }
-  content.init({ db, openai: openaiMock, config, logger })
-  return { content, db, openai: openaiMock, logger }
+  content.init({ db, ai: openaiMock, config, logger })
+  return { content, db, ai: openaiMock, logger }
 }
 
 describe('engagement.content cache lookup', () => {
 
   it('resolveImage returns cached row when present', async () => {
-    const { content, db, openai } = makeContent()
+    const { content, db, ai } = makeContent()
     db.rows.push({ url: 'https://x.com/cat.jpg', kind: 'image', text: 'cached desc', source_kind: 'auto' })
 
     const result = await content.resolveImage('https://x.com/cat.jpg')
     expect(result.text).toBe('cached desc')
-    expect(openai.vision).not.toHaveBeenCalled()
+    expect(ai.vision).not.toHaveBeenCalled()
   })
 
   it('resolveImage uses client-provided description without calling Vision', async () => {
-    const { content, db, openai } = makeContent()
+    const { content, db, ai } = makeContent()
     const result = await content.resolveImage('https://x.com/new.jpg', 'Custom description from client')
     expect(result.text).toBe('Custom description from client')
     expect(result.source_kind).toBe('provided')
-    expect(openai.vision).not.toHaveBeenCalled()
+    expect(ai.vision).not.toHaveBeenCalled()
     expect(db.rows).toHaveLength(1)
   })
 
   it('resolveVideo returns cached row when present', async () => {
-    const { content, db, openai } = makeContent()
+    const { content, db, ai } = makeContent()
     db.rows.push({
       url: 'https://x.com/v.mp4',
       kind: 'video',
@@ -88,15 +88,15 @@ describe('engagement.content cache lookup', () => {
 
     const result = await content.resolveVideo('https://x.com/v.mp4')
     expect(result.text).toBe('cached transcript')
-    expect(openai.transcribe).not.toHaveBeenCalled()
+    expect(ai.transcribe).not.toHaveBeenCalled()
   })
 
   it('resolveVideo uses client-provided transcript string', async () => {
-    const { content, db, openai } = makeContent()
+    const { content, db, ai } = makeContent()
     const result = await content.resolveVideo('https://x.com/new.mp4', 'Full transcript here')
     expect(result.text).toBe('Full transcript here')
     expect(result.source_kind).toBe('provided')
-    expect(openai.transcribe).not.toHaveBeenCalled()
+    expect(ai.transcribe).not.toHaveBeenCalled()
     expect(db.rows).toHaveLength(1)
   })
 

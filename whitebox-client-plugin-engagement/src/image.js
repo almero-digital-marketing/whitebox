@@ -18,6 +18,7 @@ const DEFAULTS = {
   requiredMs: 3000,    // ≥3s in viewport, activity gate open → engaged
   tickMs: 250,
   minPartialRatio: 0.5,
+  sequential: false,   // images are independent of one another (and of text) — track in parallel
 }
 
 function buildPayload(el, state) {
@@ -55,7 +56,7 @@ function buildPayload(el, state) {
   }
 }
 
-export default function createImageEngagements({ onRead, options = {} } = {}) {
+export default function createImageEngagements({ onRead, onProgress, options = {} } = {}) {
   const cfg = { ...DEFAULTS, ...options }
   const fixedRequiredMs = cfg.requiredMs
   const idAttribute = options.idAttribute ?? DEFAULT_IMAGE_ID_ATTR
@@ -67,6 +68,7 @@ export default function createImageEngagements({ onRead, options = {} } = {}) {
     requiredMs: () => fixedRequiredMs,
     buildPayload,
     onRead,
+    onProgress,
     options: { ...cfg, idAttribute },
   })
 

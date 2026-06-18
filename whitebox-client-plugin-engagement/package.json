@@ -1,7 +1,7 @@
 {
   "name": "whitebox-client-plugin-engagement",
   "version": "0.1.0",
-  "description": "Whitebox browser client — engagement plugin",
+  "description": "WhiteBox browser client — engagement plugin: reading / image-dwell / video-watch tracking with genuine-attention detection.",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
@@ -9,6 +9,7 @@
   },
   "files": [
     "src",
+    "docs",
     "README.md"
   ],
   "sideEffects": false,

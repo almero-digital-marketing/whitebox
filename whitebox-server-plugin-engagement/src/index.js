@@ -6,6 +6,7 @@ import * as sections from './sections.js'
 import * as text from './text.js'
 import * as videos from './videos.js'
 import * as images from './images.js'
+import * as links from './link.js'
 import createAuth from 'whitebox-server/auth'
 
 import { createDispatch, KIND_BY_TYPE, batchSchema } from './events.js'
@@ -14,58 +15,65 @@ import { registerMcp } from './mcp.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export default {
-  name: 'engagement',
+// Factory: engagement({ auth: { secret }, image: { detail }, video: { visionDetail } }).
+// Server options are auth + the AI vision detail used to caption images / video
+// frames. The reading-detection knobs (cps, dwell, viewport ratios) are CLIENT-
+// side — set on engagementPlugin({ text: { cps } }) in the browser, not here.
+export function engagement(options = {}) {
+  return {
+    name: 'engagement',
 
-  async migrate(db) {
-    await db.migrate.latest({
-      directory: path.join(__dirname, 'migrations'),
-      tableName: 'whitebox_engagement_migrations',
-    })
-  },
+    async migrate(db) {
+      await db.migrate.latest({
+        directory: path.join(__dirname, 'migrations'),
+        tableName: 'whitebox_engagement_migrations',
+      })
+    },
 
-  async register(app, ctx) {
-    const { config, db, connect, awareness, openai, logger: rootLogger } = ctx
-    const logger = rootLogger.child({ plugin: 'engagement' })
-    const engagementConfig = config.engagement || {}
+    async register(app, ctx) {
+      const { db, connect, awareness, ai, logger: rootLogger } = ctx
+      const logger = rootLogger.child({ component: 'engagement' })
+      const engagementConfig = options
 
-    // Singleton modules: capture deps once via init(), in dependency order.
-    // content first (sections/text/videos/images import it as a namespace),
-    // then the consumers which only need awareness/logger via init.
-    content.init({ db, openai, config, logger })
-    sections.init({ awareness, logger })
-    text.init({ awareness, logger })
-    videos.init({ awareness, logger })
-    images.init({ awareness, logger })
+      // Singleton modules: capture deps once via init(), in dependency order.
+      // content first (sections/text/videos/images import it as a namespace),
+      // then the consumers which only need awareness/logger via init.
+      content.init({ db, ai, options: engagementConfig, logger })
+      sections.init({ awareness, logger })
+      text.init({ awareness, logger })
+      videos.init({ awareness, logger })
+      images.init({ awareness, logger })
+      links.init({ awareness, logger })
 
-    const requireAuth = createAuth({ secret: engagementConfig.auth?.secret, logger })
+      const requireAuth = createAuth({ secret: engagementConfig.auth?.secret, logger })
 
-    const { dispatch, dispatchBatchEvent } = createDispatch({ sections, text, videos, images, logger })
+      const { dispatch, dispatchBatchEvent } = createDispatch({ sections, text, videos, images, links, logger })
 
-    // Live events arrive over the existing connect socket. Batched envelope
-    // is also supported for high-volume sessions.
-    connect.onMessage(async ({ connectionId, event, data }) => {
-      const kind = KIND_BY_TYPE[event]
-      if (!kind && event !== 'engagement.batch') return
+      // Live events arrive over the existing connect socket. Batched envelope
+      // is also supported for high-volume sessions.
+      connect.onMessage(async ({ connectionId, event, data }) => {
+        const kind = KIND_BY_TYPE[event]
+        if (!kind && event !== 'engagement.batch') return
 
-      const visitor = connect.find(connectionId)
-      if (!visitor?.passportId) return
+        const visitor = connect.find(connectionId)
+        if (!visitor?.passportId) return
 
-      if (event === 'engagement.batch') {
-        const parsed = batchSchema.safeParse(data)
-        if (!parsed.success) {
-          logger.warn({ err: parsed.error }, 'engagement.batch validation failed')
+        if (event === 'engagement.batch') {
+          const parsed = batchSchema.safeParse(data)
+          if (!parsed.success) {
+            logger.warn({ err: parsed.error }, 'engagement.batch validation failed')
+            return
+          }
+          for (const e of parsed.data.events) await dispatchBatchEvent(visitor, e)
           return
         }
-        for (const e of parsed.data.events) await dispatchBatchEvent(visitor, e)
-        return
-      }
-      await dispatch(visitor, kind, data)
-    })
+        await dispatch(visitor, kind, data)
+      })
 
-    mountRoutes(app, { db, content, dispatchBatchEvent, requireAuth })
-    registerMcp(ctx, { db, content })
+      mountRoutes(app, { db, content, dispatchBatchEvent, requireAuth })
+      registerMcp(ctx, { db, content })
 
-    logger.info('Engagement plugin ready')
-  },
+      logger.info('Engagement plugin ready')
+    },
+  }
 }

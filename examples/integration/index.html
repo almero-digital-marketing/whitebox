@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brightsmile Dental · WhiteBox integration</title>
+<style>
+  :root { --fg:#1c2530; --mut:#6b7785; --line:#e4e8ee; --accent:#2f9e95; --bg:#fafbfc; --brand:#3b5bdb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif; color:var(--fg); background:var(--bg); }
+  header { position:sticky; top:0; z-index:5; display:flex; gap:1rem; align-items:center;
+           padding:.7rem 1.2rem; background:#fff; border-bottom:1px solid var(--line); }
+  header .logo { font-weight:800; color:var(--brand); }
+  header .sp { flex:1; }
+  .pill { font:12px/1 ui-monospace,monospace; padding:.35rem .55rem; border-radius:999px; background:#eef2f5; color:var(--mut); }
+  #status.ok { color:#0a7d52; background:#e3f6ec; }
+  .pill.on { color:#0a7d52; background:#e3f6ec; } .pill.off { color:#b06b00; background:#fbf0dd; }
+  .layout { display:grid; grid-template-columns: 1fr 380px; gap:0; }
+  main { max-width:680px; margin:0 auto; padding:2rem 1.5rem 4rem; }
+  section { margin:0 0 2.5rem; }
+  .eyebrow { text-transform:uppercase; letter-spacing:.08em; font-size:.72rem; color:var(--mut); font-weight:700; }
+  h1 { font-size:2rem; margin:.3rem 0 1rem; } h2 { font-size:1.3rem; margin:0 0 .6rem; }
+  p { margin:0 0 1rem; } .hint { color:var(--mut); font-size:.9rem; }
+  .cta { display:inline-block; color:var(--brand); font-weight:600; text-decoration:none; }
+  .cta:hover { text-decoration:underline; }
+  img { width:100%; border-radius:10px; border:1px solid var(--line); display:block; margin:1.2rem 0; }
+  [data-wb-read="1"] { box-shadow:-3px 0 0 0 var(--accent); padding-left:.6rem; margin-left:-.6rem; transition:box-shadow .2s; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:1.1rem 1.2rem; background:#fff; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin-top:.8rem; }
+  .act { display:flex; flex-direction:column; align-items:flex-start; gap:.2rem; text-align:left; cursor:pointer;
+         border:1px solid var(--line); background:#f6f8fa; border-radius:10px; padding:.7rem .8rem; font:inherit; color:inherit; }
+  .act:hover { background:#eef2f5; border-color:#cdd5dd; }
+  .act b { font-size:.92rem; } .act span { font-size:.78rem; color:var(--mut); }
+  .upgrade { background:var(--brand); color:#fff; border-color:var(--brand); } .upgrade:hover { background:#314fc4; }
+  .upgrade span { color:#cdd8ff; }
+  aside { position:sticky; top:49px; height:calc(100vh - 49px); border-left:1px solid var(--line);
+          background:#fff; display:flex; flex-direction:column; }
+  .bar { display:flex; gap:.5rem; padding:.6rem .8rem; border-bottom:1px solid var(--line); align-items:center; }
+  .bar h3 { margin:0; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--mut); flex:1; }
+  .bar button { font:12px sans-serif; padding:.3rem .6rem; border:1px solid var(--line); background:#f6f8fa; border-radius:6px; cursor:pointer; }
+  #log { overflow:auto; padding:.4rem .6rem; font:12px/1.5 ui-monospace,monospace; }
+  #log .row { padding:.25rem 0; border-bottom:1px dashed #eef1f4; word-break:break-word; }
+  #log .t { color:#9aa6b2; } #log .caret { display:inline-block; width:.8em; color:#b3bcc6; }
+  #log .k { display:inline-block; min-width:54px; font-weight:700; }
+  #log .text .k,#log .image .k,#log .video .k { color:#2f6fed; } #log .link .k { color:#e0780b; }
+  #log .crm .k { color:#7048e8; } #log .consent .k { color:#0a7d52; } #log .session .k,#log .ready .k { color:#0a7d52; }
+  #log .warn .k,#log .error .k { color:#c0392b; }
+  #log .row:has(.detail) .head { cursor:pointer; }
+  #log .detail { display:none; margin:.3rem 0 .4rem 1.4rem; padding:.5rem .6rem; background:#f6f8fa; border-radius:6px; white-space:pre-wrap; color:#3a4754; max-height:300px; overflow:auto; }
+  #log .row.open .detail { display:block; }
+  #consent { position:fixed; bottom:1rem; left:1rem; right:400px; z-index:10; display:flex; gap:.8rem; align-items:center;
+             background:#1c2530; color:#fff; border-radius:12px; padding:.8rem 1rem; font-size:.9rem; }
+  #consent.hide { display:none; } #consent .sp { flex:1; }
+  #consent button { font:inherit; padding:.45rem .8rem; border-radius:8px; border:0; cursor:pointer; }
+  #consent .accept { background:var(--accent); color:#fff; } #consent .reject { background:#3a4754; color:#cdd5dd; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">🦷 Brightsmile Dental</span> <span class="hint">WhiteBox integration demo</span>
+  <span class="sp"></span>
+  <span class="pill">status: <span id="status">connecting…</span></span>
+  <span class="pill" id="consent-pill">consent: none</span>
+  <span class="pill">passport: <span id="passport">…</span></span>
+</header>
+
+<div class="layout">
+  <main>
+    <!-- Public clinic website → engagement (reading) tracking -->
+    <section>
+      <div class="eyebrow">Welcome</div>
+      <h1 data-wb-text="hero">Gentle, modern dentistry for the whole family.</h1>
+      <p class="hint" data-wb-text="sub">Scroll and pause on the copy below — the engagement plugin records which paragraphs you actually read (green marker + a <b>text</b> row on the right), exactly as on a real clinic website.</p>
+
+      <h2 data-wb-text="h-why">Why patients choose us</h2>
+      <p data-wb-text="why-1">Brightsmile Dental is built around nervous patients: unhurried appointments, gentle numbing, sedation options, and same-day care when you're in pain. Digital X-rays and intraoral scanners mean less guesswork and no goopy impressions.</p>
+      <p data-wb-text="why-2">Costs are clear before we start. We accept most dental insurance, file the claim for you, and offer interest-free monthly payment plans — the paragraph people read twice before they trust a clinic: a written treatment estimate, and no surprise bills.</p>
+
+      <img data-wb-image="clinic-room" alt="A bright, modern dental treatment room with a digital scanner"
+           src="data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='680' height='240'&gt;&lt;rect width='100%25' height='100%25' fill='%23e6f3f0'/&gt;&lt;text x='50%25' y='50%25' font-family='sans-serif' font-size='22' fill='%232f9e95' text-anchor='middle'&gt;our treatment rooms&lt;/text&gt;&lt;/svg&gt;">
+
+      <p data-wb-text="why-3">Dwell on the photo above and it logs an <b>image</b> read. Everything here flows to the same per-patient memory as the booking events below — one timeline across your website and your front desk.</p>
+    </section>
+
+    <!-- More marketing copy → more service themes for recall / cohorts -->
+    <section>
+      <div class="eyebrow">Cosmetic dentistry</div>
+      <h2 data-wb-text="h-cosmetic">A brighter smile, on your timeline</h2>
+      <p data-wb-text="cos-1">Professional teeth whitening lifts years of coffee and wine staining in about an hour, with take-home trays to keep it bright. It's our most-requested treatment and the most common reason new patients call.</p>
+      <p data-wb-text="cos-2">For chips, gaps, and worn edges, porcelain veneers and composite bonding reshape a smile in a couple of visits. Ask about a free smile-makeover consultation with a digital preview.</p>
+      <!-- Link click: the anchor text is already meaningful, so a bare data-wb-link uses it as the label. -->
+      <p><a href="#cosmetic" data-wb-link class="cta">Compare whitening &amp; veneers →</a></p>
+    </section>
+
+    <section>
+      <div class="eyebrow">Orthodontics</div>
+      <h2 data-wb-text="h-ortho">Straighter teeth, clear or classic</h2>
+      <p data-wb-text="ortho-1">Invisalign clear aligners straighten teeth without metal — removable for meals and nearly invisible, with most cases finishing in 6 to 18 months. The first orthodontic consultation is free.</p>
+      <p data-wb-text="ortho-2">For teens and more complex bites, traditional and ceramic braces are still the most predictable option. We offer monthly payment plans on every orthodontic case.</p>
+      <!-- Link click: generic "Learn more" text → data-wb-link supplies the meaning. -->
+      <p><a href="#ortho" data-wb-link="Invisalign clear aligners cost" class="cta">Learn more →</a></p>
+    </section>
+
+    <section>
+      <div class="eyebrow">Implants &amp; restorative</div>
+      <h2 data-wb-text="h-implants">Replace and repair, built to last</h2>
+      <p data-wb-text="imp-1">Dental implants replace a missing tooth root with a titanium post and a natural-looking crown — placed in-house, no referral needed. We quote the full treatment plan up front, with financing.</p>
+      <p data-wb-text="imp-2">For damaged teeth, same-day crowns are milled and fitted in one visit, and root canal therapy saves a tooth that would otherwise be lost — comfortably, under local anaesthetic.</p>
+      <!-- Link-click tracking: generic anchor text, so data-wb-link supplies the meaning. A click is a strong intent signal (recorded as a web expression). -->
+      <p><a href="#implants" data-wb-link="dental implant pricing and financing" class="cta">Learn more about implants →</a></p>
+    </section>
+
+    <!-- Patient portal → CRM client observations -->
+    <section>
+      <div class="eyebrow">Patient portal</div>
+      <h2>Simulate patient actions</h2>
+      <p class="hint">These buttons fire <b>client observations</b> (<code>wb.crm.observe</code>) — low-trust facts about what a patient did on the site/portal. They need <b>marketing consent</b> (accept below), and they're recorded as <code>source:'client'</code> evidence, not authoritative state.</p>
+      <div class="card">
+        <div class="grid">
+          <button class="act" data-crm-kind="new_patient_registered" data-crm-body="Completed new-patient registration"><b>Register as patient</b><span>new_patient_registered</span></button>
+          <button class="act" data-crm-kind="appointment_booked" data-crm-body="Booked a checkup and cleaning"><b>Book a checkup</b><span>appointment_booked</span></button>
+          <button class="act" data-crm-kind="insurance_added" data-crm-body="Added dental insurance details"><b>Add insurance</b><span>insurance_added</span></button>
+          <button class="act" data-crm-kind="whitening_interest" data-crm-body="Asked about teeth whitening"><b>Ask about whitening</b><span>whitening_interest</span></button>
+          <button class="act" data-crm-kind="treatment_plan_viewed" data-crm-body="Viewed the dental implant treatment plan"><b>View implant plan</b><span>treatment_plan_viewed</span></button>
+          <button class="act" data-crm-kind="payment_plan_selected" data-crm-body="Chose a monthly payment plan"><b>Choose payment plan</b><span>payment_plan_selected</span></button>
+          <button class="act" data-crm-kind="emergency_request" data-crm-body="Requested an emergency appointment for tooth pain"><b>Emergency request</b><span>emergency_request</span></button>
+          <button class="act" data-crm-kind="referral_sent" data-crm-body="Referred a family member"><b>Refer family</b><span>referral_sent</span></button>
+          <button class="act upgrade" data-crm-kind="treatment_accepted" data-crm-body="Accepted the Invisalign treatment plan"><b>Accept treatment</b><span>treatment_accepted</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call tracking (voip) → a per-visitor clinic number; the call attributes to the passport -->
+    <section>
+      <div class="eyebrow">Call the clinic</div>
+      <h2>Prefer to call?</h2>
+      <p class="hint">This number is assigned to <em>you</em> for the session (dynamic number insertion). Call it and the conversation attributes to your passport — no patient phone is captured. Without a PBX, hit "Simulate inbound call" to record a transcript.</p>
+      <div class="card">
+        <p style="font-size:1.05rem">Call us: <a data-wb-phone="demo" href="tel:+15555550100" style="font-weight:800;color:var(--brand);text-decoration:none">reveal number…</a></p>
+        <button class="act" id="sim-call" style="margin-top:.6rem"><b>Simulate inbound call</b><span>POST /voip/calls → voip exposure</span></button>
+      </div>
+    </section>
+
+    <!-- Request a callback → a crm observation (consent-gated) -->
+    <section>
+      <div class="eyebrow">Contact</div>
+      <h2>Request a callback</h2>
+      <form id="req-form" class="card" style="display:grid; gap:.6rem">
+        <input name="name" placeholder="Your name" required
+               style="padding:.55rem .7rem; border:1px solid var(--line); border-radius:8px; font:inherit">
+        <input name="email" type="email" placeholder="Email"
+               style="padding:.55rem .7rem; border:1px solid var(--line); border-radius:8px; font:inherit">
+        <textarea name="message" placeholder="What can we help with? (whitening, implants, an emergency…)" rows="2"
+               style="padding:.55rem .7rem; border:1px solid var(--line); border-radius:8px; font:inherit; resize:vertical"></textarea>
+        <button class="act upgrade" type="submit" style="align-items:center; text-align:center"><b>Request callback</b><span>callback_request</span></button>
+      </form>
+    </section>
+  </main>
+
+  <aside>
+    <div class="bar">
+      <h3>live events</h3>
+      <button id="flush" title="Force-flush buffered events">flush</button>
+      <button id="copy" title="Copy passport id">copy id</button>
+    </div>
+    <div id="log"></div>
+  </aside>
+</div>
+
+<!-- starts hidden; main.js reveals it only when the visitor hasn't answered yet -->
+<div id="consent" class="hide">
+  <span>Brightsmile Dental uses analytics &amp; marketing tracking. Engagement reading is always on in this demo; patient-portal events need consent.</span>
+  <span class="sp"></span>
+  <button class="reject" id="consent-reject">Reject</button>
+  <button class="accept" id="consent-accept">Accept all</button>
+</div>
+
+<!-- Classic diagnostics: surfaces a bare-specifier error if not served via serve.mjs -->
+<script>
+(function () {
+  function row(kind, msg) { var el=document.getElementById('log'); if(!el)return;
+    var r=document.createElement('div'); r.className='row '+kind;
+    r.innerHTML='<span class="t">'+new Date().toLocaleTimeString()+'</span> <span class="k">'+kind+'</span> <span class="d"></span>';
+    r.querySelector('.d').textContent=msg; el.prepend(r) }
+  addEventListener('error', function (e) {
+    var m=e.message||(e.error&&e.error.message)||String(e);
+    var s=document.getElementById('status'); if(s){s.textContent='error';s.className=''}
+    row('error', m);
+    if (/resolve module specifier|Failed to fetch dynamically/i.test(m))
+      row('warn', 'SDK bundle did not load. Serve with `node serve.mjs` and open the URL it prints.')
+  })
+})()
+</script>
+<script type="module" src="/main.js"></script>
+</body>
+</html>

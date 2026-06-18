@@ -8,6 +8,20 @@
 // If the element is removed before reaching the threshold, emit a partial event
 // if it accumulated ≥ minPartialRatio × required_ms.
 //
+// Reading order:
+//   - parallel (default): every visible element accumulates simultaneously.
+//   - sequential (opt-in): only the topmost visible, not-yet-read element
+//     accumulates — modelling top-to-bottom reading. When it fires (or scrolls
+//     out of view), focus advances to the next element down. Used for text.
+//     With a sequentialGroup(el) key, each group gets its own independent focus
+//     (e.g. headings and paragraphs read as separate top-to-bottom queues).
+//     A block past the document's first screen releases focus once its middle
+//     rises above readingLineRatio of the viewport — so a block you've read and
+//     scrolled to the top doesn't keep blocking blocks still on screen below it.
+//     First-screen (above-the-fold) blocks always count.
+//   - attendedElement() (desktop): a block the mouse pointer rests on takes
+//     focus for its group, overriding reading order — that's where attention is.
+//
 // Domain specifics (text vs image vs …) come from injected hooks:
 //   - requiredMs(el)            — how much time defines "read"
 //   - buildPayload(el, state)   — shape of the emitted event
@@ -20,6 +34,9 @@ const DEFAULT_OPTS = {
   rootMargin: '-20% 0% -20% 0%',
   tickMs: 250,
   minPartialRatio: 0.5,
+  sequential: false,
+  readingLineRatio: 0,   // sequential: release a block scrolled off the top once its bottom rises above this fraction of the viewport (0 = off)
+  endOfDocument: false,      // sequential: let blocks in the document's last screen count even while pinned in the bottom band
 }
 
 export default function createTracker({
@@ -27,6 +44,9 @@ export default function createTracker({
   requiredMs,
   buildPayload,
   onRead,
+  onProgress,
+  sequentialGroup,
+  attendedElement,
   options = {},
 } = {}) {
   if (typeof requiredMs !== 'function') throw new Error('tracker: requiredMs(el) is required')
@@ -34,13 +54,16 @@ export default function createTracker({
 
   const cfg = { ...DEFAULT_OPTS, ...options }
   const states = new WeakMap()
-  const active = new Set()
+  const observed = new Set()   // enumerable mirror of what the IO is watching
+  const active = new Set()     // elements currently accumulating time
   let io = null
   let tickTimer = null
   let started = false
 
-  function allGatesOpen() {
-    for (const g of gates) if (!g.isOpen()) return false
+  // Gates may be element-aware (e.g. a scroll-velocity gate whose threshold
+  // scales with the element's font size). Gates that don't care ignore the arg.
+  function gatesOpen(el) {
+    for (const g of gates) if (!g.isOpen(el)) return false
     return true
   }
 
@@ -54,6 +77,7 @@ export default function createTracker({
       required_ms: requiredMs(el),
       accumulated_ms: 0,
       reading: false,
+      visible: false,
       last_tick_at: 0,
       fired: false,
     }
@@ -65,13 +89,13 @@ export default function createTracker({
     for (const entry of entries) {
       const s = states.get(entry.target)
       if (!s || s.fired) continue
-      const isVisible = entry.isIntersecting && entry.intersectionRatio >= cfg.minRatio
-      updateReading(s, isVisible)
+      s.visible = entry.isIntersecting && entry.intersectionRatio >= cfg.minRatio
     }
+    reconcile()
   }
 
-  function updateReading(s, visible) {
-    const shouldRead = visible && allGatesOpen()
+  // Toggle whether an element is accumulating, folding elapsed time in on stop.
+  function setReading(s, shouldRead) {
     if (shouldRead && !s.reading) {
       s.reading = true
       s.last_tick_at = performance.now()
@@ -80,6 +104,100 @@ export default function createTracker({
       accumulate(s)
       s.reading = false
       active.delete(s.el)
+      reportProgress(s, false)   // freeze the timer where it paused
+    }
+  }
+
+  // Live dwell snapshot for an element — drives the demo's per-element timer.
+  function reportProgress(s, reading) {
+    if (!onProgress || s.fired) return
+    const live = reading ? performance.now() - s.last_tick_at : 0
+    const ms = Math.round(s.accumulated_ms + live)
+    onProgress({
+      id: s.id,
+      url: s.url,
+      ms_spent: ms,
+      required_ms: s.required_ms,
+      ratio: Math.max(0, Math.min(1, ms / s.required_ms)),
+      reading,
+    })
+  }
+
+  // The set of elements that should be accumulating in sequential mode: the
+  // topmost (highest on screen) visible, not-yet-fired element in each group.
+  // Without a sequentialGroup key everything shares one group → a single focus.
+  // Ties — and the layout-less test environment, where every rect is 0 — fall
+  // back to observe order, which is DOM order.
+  function pickFocus() {
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 0
+    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0
+    const lineY = cfg.readingLineRatio > 0 ? cfg.readingLineRatio * vh : 0
+    // End-of-document mirror of above-the-fold: when scrolled into the last
+    // screen, blocks pinned in the bottom band (they can't be scrolled up into
+    // it — there's nothing below) still count, so the final paragraphs aren't
+    // lost when there's no whitespace below them.
+    const docH = (cfg.endOfDocument && typeof document !== 'undefined') ? document.documentElement.scrollHeight : 0
+    const nearEnd = docH > 0 && scrollY + vh > docH - vh
+    const best = new Map()   // groupKey -> { s, top }
+    for (const el of observed) {
+      const s = states.get(el)
+      if (!s || s.fired) continue
+      if (!s.visible && !nearEnd) continue
+      const rect = el.getBoundingClientRect()
+      let eligible = s.visible
+      if (!eligible && rect.height > 0) {
+        // in the document's last screen and substantially on screen
+        const onScreen = Math.max(0, Math.min(rect.bottom, vh) - Math.max(rect.top, 0))
+        if (rect.bottom + scrollY > docH - vh && onScreen >= cfg.minRatio * rect.height) eligible = true
+      }
+      if (!eligible) continue
+      if (lineY > 0 && rect.height > 0) {
+        // Above-the-fold blocks (in the document's first screen) always count —
+        // they're never released by the reading line. Anything further down
+        // releases focus once you've scrolled it up so its middle passes above
+        // the line: a block you've read and pushed to the top stops blocking
+        // blocks still on screen below it. Keying off document position (not
+        // viewport position) makes this hold on a mid-page refresh too.
+        const aboveFold = rect.top + scrollY < vh
+        if (!aboveFold && (rect.top + rect.bottom) / 2 <= lineY) continue
+      }
+      const key = sequentialGroup ? sequentialGroup(el) : ''
+      const cur = best.get(key)
+      if (!cur || rect.top < cur.top) best.set(key, { s, top: rect.top })
+    }
+    // Pointer attention (desktop): a tracked element the mouse has rested on is
+    // most likely what's being read, so it takes focus for its group regardless
+    // of reading order. Null on touch / when the pointer isn't lingering.
+    if (attendedElement) {
+      const att = attendedElement()
+      const s = att && states.get(att)
+      if (s && !s.fired) {
+        const key = sequentialGroup ? sequentialGroup(att) : ''
+        best.set(key, { s, top: att.getBoundingClientRect().top })
+      }
+    }
+    const focus = new Set()
+    for (const { s } of best.values()) focus.add(s)
+    return focus
+  }
+
+  // Decide which elements should be accumulating right now. Gates are evaluated
+  // per element so an element-aware gate (e.g. font-size-scaled scroll velocity)
+  // can open for one block while closed for another at the same scroll speed.
+  function reconcile() {
+    if (cfg.sequential) {
+      const focus = pickFocus()
+      for (const el of observed) {
+        const s = states.get(el)
+        if (!s || s.fired) continue
+        setReading(s, focus.has(s) && gatesOpen(s.el))
+      }
+    } else {
+      for (const el of observed) {
+        const s = states.get(el)
+        if (!s || s.fired) continue
+        setReading(s, s.visible && gatesOpen(s.el))
+      }
     }
   }
 
@@ -90,29 +208,32 @@ export default function createTracker({
   }
 
   function tick() {
+    reconcile()
     if (!active.size) return
     const now = performance.now()
-    for (const el of active) {
+    let fired = false
+    for (const el of [...active]) {
       const s = states.get(el)
       if (!s || s.fired) { active.delete(el); continue }
-      if (!allGatesOpen()) {
-        accumulate(s)
-        s.reading = false
-        active.delete(el)
-        continue
-      }
       const live = now - s.last_tick_at
       if (s.accumulated_ms + live >= s.required_ms) {
         accumulate(s)
         fireRead(s, false)
+        fired = true
+      } else {
+        reportProgress(s, true)   // tick the live timer
       }
     }
+    // In sequential mode, advance focus to the next element immediately rather
+    // than waiting a whole tick after one completes.
+    if (fired && cfg.sequential) reconcile()
   }
 
   function fireRead(s, partial) {
     if (s.fired) return
     s.fired = true
     active.delete(s.el)
+    observed.delete(s.el)
     try { io?.unobserve(s.el) } catch { /* ignore */ }
     const payload = buildPayload(s.el, {
       id: s.id,
@@ -128,6 +249,7 @@ export default function createTracker({
     if (!io) return
     if (states.has(el) && states.get(el).fired) return
     ensureState(el)
+    observed.add(el)
     io.observe(el)
   }
 
@@ -135,11 +257,12 @@ export default function createTracker({
     const s = states.get(el)
     if (!s) return
     if (s.reading) accumulate(s)
+    active.delete(el)
+    observed.delete(el)
     if (!s.fired && s.accumulated_ms >= s.required_ms * cfg.minPartialRatio) {
       fireRead(s, true)
     } else {
       states.delete(el)
-      active.delete(el)
       try { io?.unobserve(el) } catch { /* ignore */ }
     }
   }
@@ -161,7 +284,8 @@ export default function createTracker({
     try { io?.disconnect() } catch { /* ignore */ }
     io = null
     active.clear()
+    observed.clear()
   }
 
-  return { start, stop, observe, unobserve, _states: states, _active: active }
+  return { start, stop, observe, unobserve, _states: states, _active: active, _observed: observed }
 }

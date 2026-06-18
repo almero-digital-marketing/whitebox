@@ -16,6 +16,7 @@ Awareness itself has **no public surface** by design. Analytics is the only way 
 
 - **A grounded Q&A endpoint over the whole customer.** `POST /analytics/ask` returns an LLM answer that combines semantic recall from every channel (mail bodies, call transcripts, watched video segments, web reading, CRM notes) with current-state structured context (active subscription, upcoming reservation), and cites timestamps + UTM attribution from the evidence.
 - **Cohort awareness in one call.** `POST /analytics/population` returns "how many distinct customers have seen / said anything matching this concept" with a similarity threshold — the analytics equivalent of "how big is the segment that knows X".
+- **A grounded Q&A endpoint over the whole base.** `POST /analytics/ask-population` is the cohort sibling of `/ask`: no passport, it answers population-level questions ("what are customers asking about?", "how big is the cohort that's seen X?") grounded in content from across every passport, weighted by how many customers each piece reached.
 - **Per-customer semantic search.** `POST /analytics/recall` returns the top-k chunks from one customer's history scoped by query embedding.
 - **A debug surface for the context registry.** `GET /analytics/context/:passport_id` shows exactly what each registered plugin is feeding into `/ask`, with `?provider=` filtering and paging — useful for verifying a new integration before it changes LLM answers.
 - **GDPR forget in one call.** `DELETE /analytics/passport/:id` cascades through all channels' awareness footprint.
@@ -114,6 +115,16 @@ No migrations. No worker. No DB tables. Just routes.
 
 All four are auth-protected with a Bearer token. None are public.
 
+### Pagination
+
+Every collection endpoint takes the same `limit` + `offset` params (defaults/caps differ per endpoint) and returns the same envelope:
+
+```json
+{ "data": [ ... ], "limit": 50, "offset": 0, "has_more": true }
+```
+
+`has_more` is computed by fetching one extra row — no `COUNT` query. `population` additionally returns `total` (the cohort size). The one structural exception is `context`: it returns a *map* of providers rather than a single list, so it carries the same `limit`/`offset` params but keeps a per-provider `has_more`.
+
 ### `POST /analytics/recall` — per-passport semantic search
 
 > "What does this user know about X?"
@@ -130,19 +141,23 @@ Request:
 Response:
 ```json
 {
-  "hits": [
+  "data": [
     {
       "id": 421,
-      "exposure_id": 88,
-      "chunk_text": "The Enterprise tier includes SSO, audit logs...",
+      "chunk_text": "Professional teeth whitening lifts years of staining...",
       "ts": "2024-11-12T14:23:01Z",
-      "similarity": 0.91
+      "similarity": 0.66,
+      "engagement": 0.75,
+      "depth": "deep"
     }
-  ]
+  ],
+  "limit": 10, "offset": 0, "has_more": false
 }
 ```
 
-Embeds the query, vector-searches chunks scoped to that passport, returns top matches ordered by cosine similarity.
+Paginated (`limit` ≤100, default 10). Embeds the query, vector-searches chunks scoped to that passport, and returns top matches ranked by relevance **blended with reading depth** — a deeply-read paragraph outranks a skimmed heading of similar relevance (a heading that *is* the query phrase can score the highest raw similarity yet rank below the paragraph the customer actually read). Each hit carries `engagement` (0–1 depth weight) and `depth` (`glance`/`read`/`deep`); non-text exposures (mail/voip/crm) have no depth signal and use `engagement = 1`.
+
+Pass **`min_similarity`** (0–1, default 0 = off) to apply a relevance **floor** *before* the depth blend — chunks below it are dropped rather than returned as weak "best of a bad lot" matches. Without it, a single-domain corpus returns off-topic results (every dental paragraph scores ~0.4 against any dental query); a floor of ~0.45 keeps only genuinely on-topic content. The console's `Recall` defaults to `0.45`.
 
 ### `POST /analytics/population` — cohort awareness
 
@@ -153,28 +168,31 @@ Request:
 {
   "query": "spring promotion 25% discount",
   "similarity": 0.78,
-  "limit": 5000
+  "limit": 50,
+  "offset": 0
 }
 ```
 
 Response:
 ```json
 {
-  "count": 1284,
-  "passports": [
+  "total": 1284,
+  "data": [
     {
       "passport_id": "a1b2c3d4-...",
       "hits": [{ "chunk_text": "...", "similarity": 0.94, "ts": "..." }]
     }
-  ]
+  ],
+  "limit": 50, "offset": 0, "has_more": true
 }
 ```
 
-`count` = distinct passports with at least one chunk above the similarity threshold. `passports` is the drilldown.
+`total` = the cohort size (distinct passports matching above the similarity threshold). `data` is the paginated drilldown of those passports.
 
 Parameters:
 - `similarity` — cosine threshold (default 0.75). Raise for strict concept matches, lower for fuzzy theme matches.
-- `limit` — max chunks scanned (not passports). Default 1000.
+- `limit` / `offset` — page the passport drilldown (`limit` ≤200, default 50). `total` stays the full cohort size.
+- `min_engagement` — optional reading-depth gate (0–1, default 0 = off). A web text read only puts a passport in the cohort if its depth weight clears this — e.g. `0.15` counts genuine reads but excludes skimmed headings (a heading scores ~0.05). Non-text exposures (mail/voip/crm — no depth signal) always qualify, so this never drops a customer who *called* or *was emailed* about the concept. Lets "how many customers are interested in X" mean readers, not glancers.
 
 ### `GET /analytics/timeline/:passport_id` — raw exposure history
 
@@ -185,7 +203,7 @@ Query parameters:
 - `channels` — comma-separated: `mail,voip,web`
 - `directions` — comma-separated: `exposure,expression,conversation`
 
-Response: array of exposure rows ordered by `ts` descending. No embedding logic — just SQL filter on the exposures table.
+Response: the standard `{ data, limit, offset, has_more }` envelope; `data` is exposure rows ordered by `ts` descending (`limit` ≤200, default 50). No embedding logic — just a SQL filter on the exposures table. Page with `?limit=&offset=`.
 
 ### `POST /analytics/ask` — LLM-synthesized answer
 
@@ -233,7 +251,61 @@ The system prompt enforces:
 - Mention UTM attribution when relevant
 - Don't invent attribution when UTMs are absent
 - Distinguish exposure vs expression
+- Weight reading depth + intent — a skimmed heading or passively-viewed image (a "glance") is incidental, not a stated interest; lead with what the customer genuinely read or actively did
 - Stay concise
+
+### `POST /analytics/ask-population` — LLM-synthesized answer over the whole base
+
+> "Answer a natural-language question about the entire customer base, not one customer."
+
+The cohort sibling of `/ask`. Where `/ask` grounds a single passport's recall, `ask-population` answers about the base as a whole. **No `passport_id`.** It grounds on two things:
+
+1. **Base-wide stats** (always) — total customers and a breakdown of content events by channel/direction. This makes counting/aggregate questions ("how many customers do we have?") exact.
+2. **Evidence** — *either* the semantic cohort that matches the question (collapsed into representative content weighted by how many distinct customers it reached), *or*, when the question maps to no cohort (a broad/overview question), a query-independent **base-wide content sample** (biased toward what customers *express*, not just what we broadcast).
+
+So it works for both *targeted* questions ("what do customers who asked about pricing want?") and *whole-base* questions ("what are people interested in?", "what's going on across everyone?") — the latter no longer dead-ends on an empty cohort.
+
+Request:
+```json
+{
+  "question": "What are customers most interested in right now?",
+  "similarity": 0.6,
+  "limit": 1000
+}
+```
+
+Response:
+```json
+{
+  "answer": "Pricing and SSO dominate: dozens of customers asked about per-seat pricing, and a recurring theme among enterprise visitors is SAML/SSO. Refund terms come up far less often.",
+  "cohort": { "count": 137 },
+  "stats": {
+    "customers": 4120,
+    "exposures": 38117,
+    "breakdown": [
+      { "channel": "web", "direction": "exposure", "exposures": 21044, "customers": 4001 },
+      { "channel": "mail", "direction": "expression", "exposures": 980, "customers": 612 }
+    ]
+  },
+  "evidence": [
+    {
+      "chunk_text": "How is pricing structured for larger teams?",
+      "channel": "mail",
+      "direction": "expression",
+      "similarity": 0.88,
+      "passport_count": 41
+    }
+  ]
+}
+```
+
+- `stats` — base-wide totals + channel/direction breakdown, always present. Use it for "how many" questions.
+- `cohort.count` — distinct customers whose content matched the question (the semantic cohort, not the whole base). `0` means nothing matched the specific concept; the answer is then drawn from the base-wide sample (and `evidence[].similarity` is `null`).
+- `evidence[].passport_count` — how many distinct customers that content reached; the model uses this to ground magnitude.
+- Parameters: `similarity` (default `0.5` — a full natural-language question embeds further from the content than a bare concept, so this is looser than raw `population`'s `0.75`; at `0.6` a question like "what are patients asking about insurance?" matched *nobody* despite many having read the insurance copy, which forced a misleading empty-cohort fallback), `limit` (max chunks scanned, default 1000).
+- Only short-circuits (no LLM call) when the base is genuinely empty: `{ answer: "There are no customers in the base yet.", cohort: { count: 0 }, stats, evidence: [] }`.
+
+Like `/ask`, it delegates to the awareness core (`awareness.askPopulation`) and accepts the same `instruction` / `schema` overrides from there. There is **no** per-customer structured-context step — the context registry is per-passport.
 
 ### Context providers (how other plugins feed `/ask`)
 
@@ -281,27 +353,26 @@ Returns whatever each registered context provider returns for the passport. Same
 
 Query params:
 - `provider` — comma-separated allowlist (`?provider=crm,billing`). Default: all registered. Unknown names return **400** so typos aren't silently swallowed.
-- `page` — 1-based page number. Default 1.
-- `page_size` — items per provider. Default 20, clamped to 200.
+- `limit` / `offset` — same pagination params as every other endpoint (default 20, `limit` ≤200), passed to each provider, which is expected to honor them.
 
-Page + page_size are translated into `{ limit: page_size, offset: (page-1)*page_size }` and passed to each provider, which is expected to honor them.
+Unlike the list endpoints, the response is a **map** of providers (so there's no single `data` array); it carries the same `limit`/`offset` plus a per-provider `has_more`.
 
 ```bash
 # Default — all providers, first 20 entries each
 curl -H "Authorization: Bearer $T" \
   "https://api.example.com/analytics/context/$PASSPORT_ID"
 
-# Only CRM, page 3, 10 per page
+# Only CRM, second page of 10
 curl -H "Authorization: Bearer $T" \
-  "https://api.example.com/analytics/context/$PASSPORT_ID?provider=crm&page=3&page_size=10"
+  "https://api.example.com/analytics/context/$PASSPORT_ID?provider=crm&limit=10&offset=10"
 ```
 
 Response:
 ```json
 {
   "providers": ["crm"],
-  "page": 3,
-  "page_size": 10,
+  "limit": 10,
+  "offset": 10,
   "has_more": { "crm": true },
   "context": {
     "crm": [
@@ -320,7 +391,7 @@ Response:
 
 `has_more` is a best-effort hint per array-returning provider: `true` when the slice came back full (likely more on the next page), `false` otherwise. Object-returning providers (e.g. `billing: { plan: 'pro' }`) are omitted from `has_more`. There is no total count — paginate forward until `has_more` is false.
 
-When no plugins have registered providers, returns `{ providers: [], page, page_size, context: {} }`. No LLM call, no embedding call — pure registry walk + per-provider DB query.
+When no plugins have registered providers, returns `{ providers: [], limit, offset, has_more: {}, context: {} }`. No LLM call, no embedding call — pure registry walk + per-provider DB query.
 
 ### `DELETE /analytics/passport/:passport_id` — GDPR forget
 
@@ -439,3 +510,39 @@ Tests mount the plugin on a fresh Express app with a mocked awareness module. No
 4. Return `{ answer, evidence }` so callers can verify or override the synthesis
 
 Keep these endpoints separate from the retrieval primitives so consumers can pick their abstraction level.
+
+## Ad-network reporting (standard events)
+
+Analytics can report **standard conversion events** (`purchase`, `lead`, `view_content`, …) to Meta,
+TikTok and Google (GA4) through the shared [`whitebox-adnetworks`](../whitebox-adnetworks) adapters —
+the same transport the `audiences` plugin uses for custom events.
+
+Configure networks under `config.analytics.networks` (same shape as the audiences plugin):
+
+```js
+analytics: {
+  networks: {
+    meta:   { enabled: true, pixelId: process.env.WB_META_PIXEL_ID, accessToken: process.env.WB_META_CAPI_TOKEN },
+    tiktok: { enabled: true, pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN },
+    google: { enabled: true, measurementId: process.env.WB_GA4_MEASUREMENT_ID, apiSecret: process.env.WB_GA4_API_SECRET },
+  },
+}
+```
+
+The plugin exposes a reporter on its api. Call it from your conversion handler — **after** checking
+marketing consent:
+
+```js
+// ctx.plugins.analytics.reportStandardEvent(passportId, canonical, opts)
+await ctx.plugins.analytics.reportStandardEvent(passportId, {
+  standard: 'purchase', event_id: order.id, value: order.total, currency: 'USD', content_ids: order.skus,
+}, { signals /* fbp/ttclid/ga_client_id from the client */, ip, user_agent })
+// → { meta:'accepted', tiktok:'accepted', google:'accepted' }
+```
+
+The taxonomy maps `standard` to each network's name (`purchase` → Meta `Purchase`, TikTok
+`CompletePayment`, GA4 `purchase`). PII is hashed, `event_id` dedups against the browser pixel.
+
+**Out of scope here (by design):** the *trigger* (what conversion fires which event) and the
+*consent gate* are the caller's responsibility — wire them in your conversion source. See
+`whitebox-adnetworks/README.md` for the full contract.

@@ -1,23 +1,43 @@
-export default {
-  port: 3000,
+// Whitebox runtime config.
+//
+// The default export is an `async (runtime) => ({ ... })` factory. Plugins are
+// imported by name and CALLED with their options right here in the `plugins`
+// array — the object they return ({ name, register, migrate }) is what the
+// server loads. Use `.filter(Boolean)` so a plugin can be conditionally enabled
+// by a short-circuiting expression (e.g. only mount mail when its key is set).
+//
+// All credentials come from the environment. Start with `npm start` (it runs
+// `node --env-file-if-exists=.env`), so anything in ./.env is already loaded
+// into process.env by the time this file is imported. This file holds NO
+// secrets — only structure and non-sensitive defaults.
+
+import { engagement } from 'whitebox-server-plugin-engagement'
+import { crm } from 'whitebox-server-plugin-crm'
+import { analytics } from 'whitebox-server-plugin-analytics'
+import { conversions } from 'whitebox-server-plugin-conversions'
+import { voip } from 'whitebox-server-plugin-voip'
+import { mail } from 'whitebox-server-plugin-mail'
+
+export default async (runtime) => ({
+  port: Number(process.env.WB_PORT || 3000),
 
   logger: {
-    level: 'info',                // trace | debug | info | warn | error | fatal
-    // transport: undefined       // set to null to disable pretty-print in production
+    level: process.env.WB_LOG_LEVEL || 'info',   // trace | debug | info | warn | error | fatal
+    // transport: null                            // set to null to disable pretty-print in production
   },
 
   db: {
-    host: 'localhost',
-    port: 5432,
-    database: 'whitebox',
-    user: 'whitebox',
-    password: '',
+    host: process.env.WB_DB_HOST || 'localhost',
+    port: Number(process.env.WB_DB_PORT || 5432),
+    database: process.env.WB_DB_NAME || 'whitebox',
+    user: process.env.WB_DB_USER || 'whitebox',
+    password: process.env.WB_DB_PASSWORD || '',
   },
 
   redis: {
-    host: 'localhost',
-    port: 6379,
-    // password: '',
+    host: process.env.WB_REDIS_HOST || 'localhost',
+    port: Number(process.env.WB_REDIS_PORT || 6379),
+    // password: process.env.WB_REDIS_PASSWORD,
     // db: 0,
   },
 
@@ -27,7 +47,9 @@ export default {
     timeout: 10000,
   },
 
-  plugins: ['voip', 'mail'],
+  ai: {
+    apiKey: process.env.WB_OPENAI_API_KEY,   // AI SDK provider key (OpenAI today)
+  },
 
   passports: {
     lifespans: {
@@ -37,90 +59,78 @@ export default {
     },
   },
 
-  // openai: {
-  //   apiKey: '',
-  // },
+  // Each entry is a built plugin object. Options passed to the factory are the
+  // plugin's config — there is no separate top-level block to keep in sync.
+  plugins: [
+    engagement({
+      auth: { secret: process.env.WB_ENGAGEMENT_TOKEN },
+      // image: { detail: 'low' }, video: { visionDetail: 'low' },
+    }),
 
-  // business: {
-  //   name: 'Acme Plumbing',
-  //   description: 'Residential and commercial plumbing services in Sofia.',
-  // },
+    crm({
+      auth: { secret: process.env.WB_CRM_TOKEN },
+    }),
 
-  mail: {
-    company: 'team@example.com',                         // forwarding destination for inbound + form submissions
+    analytics({
+      auth: { secret: process.env.WB_ANALYTICS_TOKEN },
+    }),
 
-    mailgun: {
-      apiKey: '',
-      domain: 'mg.example.com',
-      webhookSigningKey: '',                             // shared with Mailgun webhook signing
-    },
-
-    auth: {
-      secret: '',                                        // required Bearer token for POST /mail/inbox and /mail/outbox
-    },
-
-    webhookReplayWindowMs: 5 * 60 * 1000,                // reject Mailgun signatures older than this
-    webhookTokenTtlMs: 24 * 60 * 60 * 1000,              // how long to remember tokens for replay dedupe
-
-    outbox: {
-      rate: { max: 10, duration: 60000 },                // worker rate limit (per duration)
-      attempts: 5,                                       // total send attempts before terminal failure
-      backoffMs: 5000,                                   // initial exponential backoff
-    },
-
-    forward: {
-      attempts: 3,
-      backoffMs: 5000,
-    },
-
-    // webhooks: {
-    //   queued:     { url: 'https://example.com/hooks/mail/queued',     method: 'POST' },
-    //   sent:       { url: 'https://example.com/hooks/mail/sent',       method: 'POST' },
-    //   delivered:  { url: 'https://example.com/hooks/mail/delivered',  method: 'POST' },
-    //   opened:     { url: 'https://example.com/hooks/mail/opened',     method: 'POST' },
-    //   engaged:    { url: 'https://example.com/hooks/mail/engaged',    method: 'POST' },
-    //   bounced:    { url: 'https://example.com/hooks/mail/bounced',    method: 'POST' },
-    //   complained: { url: 'https://example.com/hooks/mail/complained', method: 'POST' },
-    //   failed:     { url: 'https://example.com/hooks/mail/failed',     method: 'POST' },
-    //   received:   { url: 'https://example.com/hooks/mail/received',   method: 'POST' },
-    // },
-  },
-
-  voip: {
-    country: 'BG',
-    url: 'https://example.com',
-    recordsFolder: '/var/whitebox/voip/records',
-    context: './context/speech.md',
-    transcription: false,
-    language: 'bg-BG',
-
-    pbx: {
-      host: 'pbx.example.com',
-      user: 'voip',
-      password: '',
-    },
-
-    monitor: {
-      url: 'http://pbx.example.com/monitor',
-      auth: { username: '', password: '' },
-    },
-
-    lines: [
-      {
-        in: ['+35924000000'],
-        out: ['+359880000000'],
-        tag: 'sales',
-        strategy: 'hunt',
-        prefix: '00',
-        // message: '/path/to/hold.mp3',
+    // Receives /conversions/events from the browser, records them, and (when a
+    // network's creds are present) fans out to the ad platforms, deduped by
+    // event_id. With no networks configured it records into awareness only.
+    conversions({
+      auth: { secret: process.env.WB_CONVERSIONS_TOKEN },   // Bearer for the GET audit endpoint (optional)
+      networks: {
+        meta:   { pixelId: process.env.WB_META_PIXEL_ID,      accessToken: process.env.WB_META_CAPI_TOKEN },
+        tiktok: { pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN },
+        // GA4 is handled CLIENT-SIDE via the gtag pixel (easier to debug in the
+        // browser, and GA4 has no pixel↔MP event_id dedup). Do NOT enable the
+        // server `google` MP adapter alongside client gtag — non-purchase events
+        // would double-count. Use it only for a server-ONLY GA4 setup.
+        // google: { measurementId: process.env.WB_GA4_MEASUREMENT_ID, apiSecret: process.env.WB_GA4_API_SECRET },
       },
-    ],
+    }),
 
-    webhooks: {
-      ring: { url: 'https://example.com/hooks/ring', method: 'POST' },
-      pick: { url: 'https://example.com/hooks/pick', method: 'POST' },
-      call: { url: 'https://example.com/hooks/call', method: 'POST' },
-    },
+    voip({
+      country: 'BG',
+      recordsFolder: 'recordings',   // relative to the server's working dir (absolute paths also work)
+      context: './context/speech.md',
+      transcription: false,
+      language: 'bg-BG',
+      lines: [
+        {
+          in: ['+35924000000'],
+          out: ['+359880000000'],
+          tag: 'sales',
+          strategy: 'hunt',
+          prefix: '00',
+          // message: '/path/to/hold.mp3',
+        },
+      ],
+      // ari: { url: process.env.WB_ARI_URL, user: process.env.WB_ARI_USER, password: process.env.WB_ARI_PASSWORD },
+      // webhooks: {
+      //   ring: { url: 'https://example.com/hooks/voip/ring', method: 'POST' },
+      //   pick: { url: 'https://example.com/hooks/voip/pick', method: 'POST' },
+      //   call: { url: 'https://example.com/hooks/voip/call', method: 'POST' },
+      // },
+    }),
 
-  },
-}
+    // Mail only mounts when a Mailgun key is present — the && short-circuits to a
+    // falsy value otherwise, and `.filter(Boolean)` drops it from the array.
+    process.env.WB_MAILGUN_API_KEY && mail({
+      company: 'team@example.com',   // forwarding destination for inbound + form submissions
+      mailgun: {
+        apiKey: process.env.WB_MAILGUN_API_KEY,
+        domain: process.env.WB_MAILGUN_DOMAIN || 'mg.example.com',
+        webhookSigningKey: process.env.WB_MAILGUN_WEBHOOK_SIGNING_KEY,
+      },
+      auth: { secret: process.env.WB_MAIL_TOKEN },   // Bearer token for POST /mail/inbox and /mail/outbox
+      webhookReplayWindowMs: 5 * 60 * 1000,          // reject Mailgun signatures older than this
+      outbox: {
+        rate: { max: 10, duration: 60000 },          // worker rate limit (per duration)
+        attempts: 5,                                 // total send attempts before terminal failure
+        backoffMs: 5000,                             // initial exponential backoff
+      },
+    }),
+  ].filter(Boolean),
+})

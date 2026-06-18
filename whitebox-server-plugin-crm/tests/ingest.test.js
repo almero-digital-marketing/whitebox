@@ -296,3 +296,46 @@ describe('crm.ingest — ingestFacts', () => {
     expect(awareness.record).toHaveBeenCalledOnce()
   })
 })
+
+describe('ingestObservations (client-reported, low-trust)', () => {
+  it('records each observation as a client-tagged crm/observation', async () => {
+    const awareness = makeAwareness()
+    setup({ awareness })
+
+    const out = await ingest.ingestObservations({
+      passport_id: 'p-1',
+      observations: [
+        { id: 'o1', kind: 'onboarding_step', body: 'completed step 3' },
+        { id: 'o2', kind: 'cart', body: 'added 2 items', meta: { count: 2 } },
+      ],
+    })
+
+    expect(out.observations).toEqual({ accepted: 2, dropped: 0 })
+    expect(awareness.record).toHaveBeenCalledTimes(2)
+    expect(awareness.record).toHaveBeenCalledWith(expect.objectContaining({
+      passport_id: 'p-1',
+      channel: 'crm',
+      direction: 'observation',
+      source: 'client',
+      content_id: 'client:obs:onboarding_step:o1',
+      text: 'completed step 3',
+      meta: expect.objectContaining({ kind: 'onboarding_step', client: true }),
+    }))
+  })
+
+  it('drops everything when there is no passport_id', async () => {
+    const awareness = makeAwareness()
+    setup({ awareness })
+    const out = await ingest.ingestObservations({ observations: [{ id: 'o1', kind: 'k', body: 'b' }] })
+    expect(out).toMatchObject({ reason: 'no_identity', observations: { accepted: 0, dropped: 1 } })
+    expect(awareness.record).not.toHaveBeenCalled()
+  })
+
+  it('skips observations without a body', async () => {
+    const awareness = makeAwareness()
+    setup({ awareness })
+    const out = await ingest.ingestObservations({ passport_id: 'p-1', observations: [{ id: 'o1', kind: 'k' }] })
+    expect(out.observations.accepted).toBe(0)
+    expect(awareness.record).not.toHaveBeenCalled()
+  })
+})
