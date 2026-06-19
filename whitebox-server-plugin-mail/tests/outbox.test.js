@@ -118,6 +118,43 @@ describe('outbox.track status rank', () => {
   })
 })
 
+describe('outbox.track recipient backfill (batched rows with no provider id yet)', () => {
+  // Bespoke db: the provider_message_id match misses (batched rows have null),
+  // the recipient lookup returns a candidate, then the by-id update backfills it.
+  function makeBackfillDb(candidate) {
+    return () => ({
+      where: (cond) => {
+        if (cond && 'provider_message_id' in cond) {
+          return { whereIn: () => ({ update: () => ({ returning: async () => [] }) }) }
+        }
+        return { update: (data) => ({ returning: async () => [{ ...candidate, id: cond.id, ...data }] }) }
+      },
+      whereRaw: () => ({
+        whereNull: () => ({ whereNotNull: () => ({ whereIn: () => ({ orderBy: () => ({ first: async () => candidate }) }) }) }),
+      }),
+    })
+  }
+  const initOutbox = (db) => outbox.init({
+    db,
+    q: { createQueue: () => ({}), createWorker: () => ({ on: () => {} }) },
+    notify: vi.fn(async () => {}),
+    config: { mail: {} },
+    logger: { error: vi.fn(), warn: vi.fn() },
+  })
+
+  it('matches by recipient and backfills the provider_message_id', async () => {
+    initOutbox(makeBackfillDb({ id: 7, to: 'a@x.com', status: 'sent', batch_id: 'B', provider_message_id: null }))
+    const row = await outbox.track('mg-evt-1', 'opened', { recipient: 'A@X.com' })
+    expect(row).toMatchObject({ id: 7, provider_message_id: 'mg-evt-1', status: 'opened' })
+  })
+
+  it('returns null when no batched candidate matches the recipient', async () => {
+    initOutbox(makeBackfillDb(null))
+    const row = await outbox.track('mg-evt-x', 'opened', { recipient: 'nobody@x.com' })
+    expect(row).toBeNull()
+  })
+})
+
 describe('outbox.create idempotency', () => {
   it('returns existing row if idempotency key already exists', async () => {
     const { outbox } = makeOutbox()

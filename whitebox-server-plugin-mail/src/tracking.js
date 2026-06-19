@@ -71,7 +71,9 @@ export async function handle(req, res) {
   // --- Outbox status tracking ---
   const status = statusMap[event]
   if (status && messageId) {
-    const row = await outbox.track(messageId, status).catch(err => {
+    // recipient lets track() match + backfill batched rows that have no
+    // per-recipient provider id yet (e.g. Mailgun recipient-variables batches).
+    const row = await outbox.track(messageId, status, { recipient }).catch(err => {
       logger.error({ err }, 'Failed to track outbox status: %s %s', messageId, status)
       return null
     })

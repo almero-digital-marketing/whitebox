@@ -73,7 +73,7 @@ export function mail(options = {}) {
       outbox.init({ db, q, templates, passports, sessions, awareness, notify, config, logger, provider })
       inbox.init({ config, db, q, passports, sessions, awareness, notify, logger, provider })
       tracking.init({ notify, awareness, logger, provider })
-      bulk.init({ notify, logger })
+      bulk.init({ notify, logger, provider })
 
       logger.info('Mail provider: %s', provider.name || 'unknown')
 

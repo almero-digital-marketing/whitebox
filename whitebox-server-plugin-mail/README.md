@@ -187,13 +187,32 @@ POST /mail/bulk (auth)
   ↓ dedupe by normalized email
   ↓ checkMany() against suppressions + invalid — one query each
   ↓ saveUrl() attachments once for the whole batch
-  ↓ outbox.createMany() — single INSERT
-  ↓ outboxQueue.addBulk() — single Redis op
+  ↓ outbox.createMany() — single INSERT (one row per recipient)
+  ↓ enqueue:
+      provider has sendBatch() → chunk jobs of ≤ provider.maxBatchSize
+                                 (one provider call per chunk)
+      otherwise               → one job per row (fan-out)
   ↓ notify mail.bulk.queued
   ← 202 { batch_id, accepted, skipped_*, duplicates }
 
 GET /mail/bulk/:batchId            → status counts (GROUP BY status)
 POST /mail/bulk/:batchId/cancel    → cancel queued rows in batch
+```
+
+**Native provider batch.** The row-per-recipient model is unchanged (so cancel,
+stats, awareness, and suppression all still work per recipient); only the *send*
+is batched. The worker drains a chunk and makes one `provider.sendBatch(messages)`
+call:
+
+- **Postmark** — `sendEmailBatch` (≤500), each message independently rendered, a
+  `MessageID` per recipient → per-recipient tracking is direct.
+- **Mailgun** — when the chunk's rendered body is uniform, one `recipient-variables`
+  call (≤1000) that returns no per-recipient ids; the tracking handler then
+  matches the first webhook per recipient by email (scoped to batched rows) and
+  backfills `provider_message_id`. Personalized (differently-rendered) chunks fall
+  back to concurrent individual sends, which return real per-recipient ids.
+
+A provider without `sendBatch` keeps the original one-job-per-recipient fan-out.
 ```
 
 ### Inbound — contact form

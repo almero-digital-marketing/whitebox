@@ -77,87 +77,10 @@ export function init(deps) {
   outboxQueue = q.createQueue('mail:outbox')
 
   q.createWorker('mail:outbox', async job => {
-    const { id } = job.data
-    const row = await find(id)
-    if (!row || row.status !== 'queued') return
-
-    // Skip recipients we know we shouldn't / can't send to
-    const blockReason = await preflightBlock(row.to)
-    if (blockReason) {
-      const failedRow = await failed(id, {
-        reason: blockReason,
-        attempts: job.attemptsMade + 1,
-        terminal: true,
-      })
-      if (failedRow) await notify('mail.failed', { type: 'mail.failed', data: failedRow })
-      return
-    }
-
-    try {
-      await resolveRecipient(row)   // resolve + link + persist the passport (mutates row.passport_id)
-    } catch (err) {
-      logger.warn({ err }, 'Failed to identify/link outbox recipient: %s', row.to)
-    }
-
-    const session = row.session_id && sessions?.findById
-      ? await sessions.findById(row.session_id).catch(() => null)
-      : null
-
-    const html = row.html ?? (row.template && templates
-      ? await templates.renderText({ layout: row.template, ...row, session, ...(row.data || {}) })
-      : null)
-
-    let info
-    try {
-      info = await mailer.send({ to: row.to, replyTo: row.from || null, subject: row.subject, html, text: row.text, attachments: row.attachments || [], track: true })
-    } catch (err) {
-      const { permanent, statusCode, message } = provider.classifyError?.(err) ?? invalid.classifyMailerError(err)
-      if (permanent) {
-        // Add to invalid list so we never try this address again
-        await invalid.add({
-          email: row.to,
-          reason: 'rejected',
-          source: provider.name,
-          errorMessage: `${statusCode ? `[${statusCode}] ` : ''}${message}`.slice(0, 512),
-        }).catch(e => logger.error({ err: e }, 'Failed to record invalid recipient: %s', row.to))
-        const failedRow = await failed(id, {
-          reason: `rejected:${message}`,
-          attempts: job.attemptsMade + 1,
-          terminal: true,
-        })
-        if (failedRow) await notify('mail.failed', { type: 'mail.failed', data: failedRow })
-        return // swallow — no BullMQ retry
-      }
-      throw err // transient — let BullMQ retry
-    }
-
-    const messageId = info?.messageId || null
-    if (!messageId) {
-      logger.error({ outboxId: id }, 'Provider returned no messageId — tracking webhooks will not match')
-    }
-    const sentRow = await sent(id, messageId)
-
-    await notify('mail.sent', { type: 'mail.sent', data: sentRow })
-
-    if (awareness && sentRow.passport_id) {
-      const body = sentRow.text || stripHtml(sentRow.html) || ''
-      await awareness.record({
-        passport_id: sentRow.passport_id,
-        session_id: sentRow.session_id,
-        ts: sentRow.sent_at,
-        channel: 'mail',
-        direction: 'exposure',
-        source: 'email',
-        content_id: `outbox:${sentRow.id}`,
-        text: `Subject: ${sentRow.subject}\n\n${body}`,
-        meta: {
-          to: sentRow.to,
-          from: sentRow.from,
-          template: sentRow.template,
-          provider_message_id: sentRow.provider_message_id,
-        },
-      }).catch(err => logger.warn({ err, outboxId: sentRow.id }, 'awareness.record failed'))
-    }
+    // Bulk batches arrive as { ids: [...] } (one provider call for the chunk);
+    // single sends as { id }.
+    if (Array.isArray(job.data.ids)) return processBatch(job.data.ids)
+    return processSingle(job.data.id, job.attemptsMade + 1)
   }, {
     limiter: {
       max: mailConfig.outbox?.rate?.max ?? 10,
@@ -169,16 +92,174 @@ export function init(deps) {
       removeOnComplete: true,
     },
   }).on('failed', async (job, err) => {
-    if (!job?.data?.id) return
+    if (!job?.data) return
     const attemptsMade = job.attemptsMade
     const terminal = attemptsMade >= (job.opts.attempts ?? attempts)
     try {
-      const row = await failed(job.data.id, { reason: err.message, attempts: attemptsMade, terminal })
-      if (terminal && row) await notify('mail.failed', { type: 'mail.failed', data: row })
+      if (Array.isArray(job.data.ids)) {
+        // Whole-chunk failure (sendBatch threw). On the terminal attempt, fail
+        // any rows still queued — none of them were sent.
+        if (!terminal) return
+        for (const id of job.data.ids) {
+          const cur = await find(id)
+          if (!cur || cur.status !== 'queued') continue
+          const row = await failed(id, { reason: err.message, attempts: attemptsMade, terminal: true })
+          if (row) await notify('mail.failed', { type: 'mail.failed', data: row }).catch(() => {})
+        }
+      } else if (job.data.id) {
+        const row = await failed(job.data.id, { reason: err.message, attempts: attemptsMade, terminal })
+        if (terminal && row) await notify('mail.failed', { type: 'mail.failed', data: row })
+      }
     } catch (e) {
-      logger.error({ err: e }, 'Failed to record outbox failure: %s', job.data.id)
+      logger.error({ err: e }, 'Failed to record outbox failure')
     }
   })
+}
+
+// Resolve a queued row's passport (mutates row.passport_id), then render it into
+// a provider message. Note: outbound sets reply-to (not from) to the row's from,
+// so the provider's default sender is used as From.
+async function buildMessage(row) {
+  const session = row.session_id && sessions?.findById
+    ? await sessions.findById(row.session_id).catch(() => null)
+    : null
+  const html = row.html ?? (row.template && templates
+    ? await templates.renderText({ layout: row.template, ...row, session, ...(row.data || {}) })
+    : null)
+  return {
+    to: row.to,
+    replyTo: row.from || null,
+    subject: row.subject,
+    html,
+    text: row.text,
+    attachments: row.attachments || [],
+    track: true,
+    data: row.data || {},
+  }
+}
+
+// Record a send into the events bus + per-passport awareness.
+async function recordSent(sentRow) {
+  await notify('mail.sent', { type: 'mail.sent', data: sentRow })
+  if (awareness && sentRow.passport_id) {
+    const body = sentRow.text || stripHtml(sentRow.html) || ''
+    await awareness.record({
+      passport_id: sentRow.passport_id,
+      session_id: sentRow.session_id,
+      ts: sentRow.sent_at,
+      channel: 'mail',
+      direction: 'exposure',
+      source: 'email',
+      content_id: `outbox:${sentRow.id}`,
+      text: `Subject: ${sentRow.subject}\n\n${body}`,
+      meta: {
+        to: sentRow.to,
+        from: sentRow.from,
+        template: sentRow.template,
+        provider_message_id: sentRow.provider_message_id,
+      },
+    }).catch(err => logger.warn({ err, outboxId: sentRow.id }, 'awareness.record failed'))
+  }
+}
+
+// Blocklist the address if the provider classifies the send error as permanent.
+async function markInvalidIfPermanent(row, errLike) {
+  const c = provider.classifyError?.(errLike) ?? invalid.classifyMailerError(errLike)
+  if (c.permanent) {
+    await invalid.add({
+      email: row.to,
+      reason: 'rejected',
+      source: provider.name,
+      errorMessage: `${c.statusCode ? `[${c.statusCode}] ` : ''}${c.message}`.slice(0, 512),
+    }).catch(e => logger.error({ err: e }, 'Failed to record invalid recipient: %s', row.to))
+  }
+  return c
+}
+
+async function processSingle(id, attemptsMade) {
+  const row = await find(id)
+  if (!row || row.status !== 'queued') return
+
+  const blockReason = await preflightBlock(row.to)
+  if (blockReason) {
+    const failedRow = await failed(id, { reason: blockReason, attempts: attemptsMade, terminal: true })
+    if (failedRow) await notify('mail.failed', { type: 'mail.failed', data: failedRow })
+    return
+  }
+
+  try {
+    await resolveRecipient(row)
+  } catch (err) {
+    logger.warn({ err }, 'Failed to identify/link outbox recipient: %s', row.to)
+  }
+
+  let info
+  try {
+    info = await mailer.send(await buildMessage(row))
+  } catch (err) {
+    const c = await markInvalidIfPermanent(row, err)
+    if (c.permanent) {
+      const failedRow = await failed(id, { reason: `rejected:${c.message}`, attempts: attemptsMade, terminal: true })
+      if (failedRow) await notify('mail.failed', { type: 'mail.failed', data: failedRow })
+      return   // swallow — no BullMQ retry
+    }
+    throw err   // transient — let BullMQ retry
+  }
+
+  const messageId = info?.messageId || null
+  if (!messageId) logger.error({ outboxId: id }, 'Provider returned no messageId — tracking webhooks will not match')
+  const sentRow = await sent(id, messageId)
+  await recordSent(sentRow)
+}
+
+// One provider batch call for a chunk of queued rows from a bulk send. Rows that
+// preflight-block or error in the result are failed individually; a thrown
+// sendBatch (transient) propagates so BullMQ retries the whole chunk.
+async function processBatch(ids) {
+  const rows = []
+  for (const id of ids) {
+    const row = await find(id)
+    if (row && row.status === 'queued') rows.push(row)
+  }
+  if (!rows.length) return
+
+  const messages = []
+  const sendable = []
+  for (const row of rows) {
+    const blockReason = await preflightBlock(row.to)
+    if (blockReason) {
+      const failedRow = await failed(row.id, { reason: blockReason, attempts: 1, terminal: true })
+      if (failedRow) await notify('mail.failed', { type: 'mail.failed', data: failedRow })
+      continue
+    }
+    try {
+      await resolveRecipient(row)
+    } catch (err) {
+      logger.warn({ err }, 'Failed to identify/link outbox recipient: %s', row.to)
+    }
+    messages.push(await buildMessage(row))
+    sendable.push(row)
+  }
+  if (!sendable.length) return
+
+  const results = await mailer.sendBatch(messages)
+
+  for (let i = 0; i < sendable.length; i++) {
+    const row = sendable[i]
+    const r = results[i] || {}
+    if (r.error) {
+      const c = await markInvalidIfPermanent(row, { message: r.error })
+      const failedRow = await failed(row.id, {
+        reason: `${c.permanent ? 'rejected:' : ''}${r.error}`.slice(0, 512),
+        attempts: 1,
+        terminal: true,
+      })
+      if (failedRow) await notify('mail.failed', { type: 'mail.failed', data: failedRow })
+      continue
+    }
+    const sentRow = await sent(row.id, r.messageId || null)
+    await recordSent(sentRow)
+  }
 }
 
 async function preflightBlock(email) {
@@ -340,7 +421,13 @@ export async function failed(id, { reason, attempts, terminal }) {
   return updated
 }
 
-export async function track(providerMessageId, status) {
+// Advance an outbox row's status from a tracking webhook. Normally matched by
+// provider_message_id. For batched sends where the provider returns no
+// per-recipient id (e.g. Mailgun's recipient-variables batch), the row's
+// provider_message_id is null — so on the first event for that recipient we
+// match by email (scoped to batched, still-unidentified rows) and backfill the
+// id the webhook carries, so subsequent events match directly.
+export async function track(providerMessageId, status, { recipient } = {}) {
   const targetRank = STATUS_RANK[status]
   if (targetRank == null) return null
 
@@ -348,12 +435,35 @@ export async function track(providerMessageId, status) {
   if (!advanceableFrom.length) return null
 
   const field = `${status}_at`
-  const [updated] = await db(TABLE)
-    .where({ provider_message_id: providerMessageId })
-    .whereIn('status', advanceableFrom)
-    .update({ status, [field]: new Date() })
-    .returning('*')
-  return updated || null
+
+  if (providerMessageId) {
+    const [updated] = await db(TABLE)
+      .where({ provider_message_id: providerMessageId })
+      .whereIn('status', advanceableFrom)
+      .update({ status, [field]: new Date() })
+      .returning('*')
+    if (updated) return updated
+  }
+
+  // Backfill path: a batched row that hasn't been bound to an id yet.
+  if (providerMessageId && recipient) {
+    const candidate = await db(TABLE)
+      .whereRaw('lower("to") = ?', [String(recipient).toLowerCase()])
+      .whereNull('provider_message_id')
+      .whereNotNull('batch_id')
+      .whereIn('status', advanceableFrom)
+      .orderBy('sent_at', 'desc')
+      .first()
+    if (candidate) {
+      const [updated] = await db(TABLE)
+        .where({ id: candidate.id })
+        .update({ provider_message_id: providerMessageId, status, [field]: new Date() })
+        .returning('*')
+      return updated || null
+    }
+  }
+
+  return null
 }
 
 export async function find(id) {

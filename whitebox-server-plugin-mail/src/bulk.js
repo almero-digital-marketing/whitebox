@@ -6,6 +6,7 @@ import * as outbox from './outbox.js'
 import * as attachments from './attachments.js'
 
 const MAX_RECIPIENTS_PER_BATCH = 10_000
+const DEFAULT_BATCH_SIZE = 500
 
 const recipientSchema = z.object({
   to: z.string().email(),
@@ -32,9 +33,22 @@ function normalize(email) {
 // wrapping factory closure. Matches the core pattern.
 let notify
 let logger
+let provider
 
 export function init(deps) {
-  ;({ notify, logger } = deps)
+  ;({ notify, logger, provider } = deps)
+}
+
+// One BullMQ job per chunk of rows (≤ the provider's max batch size). The worker
+// turns each into a single provider.sendBatch call. jobId is stable per chunk so
+// it stays idempotent on re-submit.
+function chunkJobs(rows, batchId, size) {
+  const jobs = []
+  for (let i = 0; i < rows.length; i += size) {
+    const chunk = rows.slice(i, i + size)
+    jobs.push({ name: 'batch', data: { batchId, ids: chunk.map(r => r.id) }, opts: { jobId: `${batchId}-c${i / size}` } })
+  }
+  return jobs
 }
 
 export async function send({ subject, from, html, text, template, attachment_urls: attachmentUrls, recipients }) {
@@ -96,14 +110,14 @@ export async function send({ subject, from, html, text, template, attachment_url
 
   const rows = await outbox.createMany(items)
 
-  // Bulk-enqueue jobs (faster than one-by-one). Use row.id as jobId so we can
-  // target individual jobs for removal when cancelling the batch.
+  // Enqueue jobs. When the provider supports native batch send, group rows into
+  // chunk jobs (one provider call each); otherwise fall back to one job per row
+  // (jobId = row.id, so a job can be targeted for removal on cancel).
   if (rows.length) {
-    const jobs = rows.map(row => ({
-      name: 'send',
-      data: { id: row.id },
-      opts: { jobId: String(row.id) },
-    }))
+    const jobs = (typeof provider?.sendBatch === 'function')
+      ? chunkJobs(rows, batchId, Math.max(1, provider.maxBatchSize || DEFAULT_BATCH_SIZE))
+      : rows.map(row => ({ name: 'send', data: { id: row.id }, opts: { jobId: String(row.id) } }))
+
     if (typeof outbox.outboxQueue.addBulk === 'function') {
       await outbox.outboxQueue.addBulk(jobs)
     } else {

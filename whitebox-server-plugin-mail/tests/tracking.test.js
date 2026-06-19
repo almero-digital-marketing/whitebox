@@ -68,7 +68,7 @@ describe('tracking.handle event mapping', () => {
     const { tracking, outbox } = makeTracking({ parsed: { event, messageId: 'msg1' } })
     const res = makeRes()
     await tracking.handle(req(), res)
-    expect(outbox.track).toHaveBeenCalledWith('msg1', status)
+    expect(outbox.track).toHaveBeenCalledWith('msg1', status, { recipient: undefined })
     expect(res._status).toBe(200)
   })
 

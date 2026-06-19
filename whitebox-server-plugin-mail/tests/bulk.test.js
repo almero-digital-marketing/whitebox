@@ -71,7 +71,7 @@ function makeOutbox(overrides = {}) {
   return outbox
 }
 
-function makeBulk({ outbox: outboxOverrides, suppressedEmails = [], invalidEmails = [], notify } = {}) {
+function makeBulk({ outbox: outboxOverrides, suppressedEmails = [], invalidEmails = [], notify, provider } = {}) {
   const ob = makeOutbox(outboxOverrides ?? {})
   attachments.saveUrl.mockReset().mockImplementation(async (url) => `/mail/attachments/${url.split('/').pop()}`)
   // Init the suppression/invalid singletons with a db that yields the seeded sets.
@@ -81,6 +81,7 @@ function makeBulk({ outbox: outboxOverrides, suppressedEmails = [], invalidEmail
   bulk.init({
     notify: notify ?? vi.fn(async () => {}),
     logger: { warn: vi.fn(), error: vi.fn() },
+    provider,
   })
   return { bulk, outbox: ob }
 }
@@ -169,6 +170,31 @@ describe('bulk.send', () => {
       data: { id: expect.any(Number) },
       opts: { jobId: expect.any(String) },
     })
+  })
+
+  it('chunk-enqueues batch jobs when the provider supports native batch', async () => {
+    const provider = { sendBatch: () => {}, maxBatchSize: 2 }
+    const { bulk, outbox } = makeBulk({ provider })
+    await bulk.send({
+      subject: 'Hi',
+      text: 'hi',
+      recipients: [{ to: 'a@x.com' }, { to: 'b@x.com' }, { to: 'c@x.com' }],
+    })
+    const jobs = outbox.outboxQueue.addBulk.mock.calls[0][0]
+    // 3 recipients at maxBatchSize 2 → two chunk jobs (2 + 1)
+    expect(jobs).toHaveLength(2)
+    expect(jobs[0]).toMatchObject({ name: 'batch', data: { ids: expect.any(Array) } })
+    expect(jobs[0].data.ids).toHaveLength(2)
+    expect(jobs[1].data.ids).toHaveLength(1)
+    expect(jobs[0].opts.jobId).toMatch(/-c0$/)
+    expect(jobs[1].opts.jobId).toMatch(/-c1$/)
+  })
+
+  it('falls back to one job per row when the provider has no sendBatch', async () => {
+    const { bulk, outbox } = makeBulk({ provider: { /* no sendBatch */ } })
+    await bulk.send({ subject: 'Hi', text: 'hi', recipients: [{ to: 'a@x.com' }, { to: 'b@x.com' }] })
+    const jobs = outbox.outboxQueue.addBulk.mock.calls[0][0]
+    expect(jobs.every(j => j.name === 'send')).toBe(true)
   })
 
   it('notifies mail.bulk.queued', async () => {
