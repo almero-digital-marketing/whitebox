@@ -11,7 +11,12 @@ import * as outbox from '../src/outbox.js'
 // onto outbox status + suppression/invalid side effects.
 vi.mock('../src/suppressions.js', () => ({ init: vi.fn(), add: vi.fn(async () => ({ id: 1 })) }))
 vi.mock('../src/invalid.js', () => ({ init: vi.fn(), add: vi.fn(async () => ({ id: 1 })) }))
-vi.mock('../src/outbox.js', () => ({ init: vi.fn(), track: vi.fn(async () => ({ id: 1, status: 'delivered' })) }))
+vi.mock('../src/outbox.js', () => ({
+  init: vi.fn(),
+  track: vi.fn(async () => ({ id: 1, status: 'delivered' })),
+  // tracking.recordTrackedEvent derives the open body from text || stripHtml(html)
+  stripHtml: (html) => (html ? String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : ''),
+}))
 
 // Re-init the tracking singleton with a fresh fake provider per test. `parsed`
 // is what provider.parseTracking returns; `verifyResult` what verifySignature
@@ -169,11 +174,11 @@ describe('tracking.handle invalid list', () => {
 })
 
 describe('tracking.handle awareness recording (user-story interleaving)', () => {
-  it('records an awareness expression when a tracked open arrives', async () => {
+  it('records an awareness EXPOSURE (subject + body) when a tracked open arrives', async () => {
     const row = {
       id: 42, status: 'opened', provider_message_id: 'mg-1',
       passport_id: 'p-1', session_id: 7,
-      subject: 'Spring promo', to: 'alice@x',
+      subject: 'Spring promo', text: 'Body copy here', to: 'alice@x',
     }
     const { tracking, awareness } = makeTracking({ parsed: { event: 'opened', messageId: 'mg-1' }, trackResult: row })
     await tracking.handle(req(), makeRes())
@@ -184,22 +189,25 @@ describe('tracking.handle awareness recording (user-story interleaving)', () => 
       passport_id: 'p-1',
       session_id:  7,
       channel:     'mail',
-      direction:   'expression',
+      direction:   'exposure',                       // an open is exposure to the full content
       source:      'opened',
       content_id:  'mail:42:opened',
     })
-    expect(call.text).toContain('Opened: Spring promo')
+    expect(call.text).toContain('Spring promo')      // subject
+    expect(call.text).toContain('Body copy here')    // ...and the body, only now that they opened it
     expect(call.meta).toMatchObject({ outbox_id: 42, provider_message_id: 'mg-1', to: 'alice@x', status: 'opened' })
   })
 
-  it('records when a clicked event lands (status maps to engaged)', async () => {
-    const row = { id: 42, status: 'engaged', provider_message_id: 'mg-1', passport_id: 'p-1', subject: 'X', to: 'a@b' }
+  it('records a click as an EXPRESSION (label only) — body already landed at open', async () => {
+    const row = { id: 42, status: 'engaged', provider_message_id: 'mg-1', passport_id: 'p-1', subject: 'X', text: 'Body', to: 'a@b' }
     const { tracking, awareness } = makeTracking({ parsed: { event: 'clicked', messageId: 'mg-1' }, trackResult: row })
     await tracking.handle(req(), makeRes())
     const call = awareness.record.mock.calls[0][0]
+    expect(call.direction).toBe('expression')
     expect(call.source).toBe('engaged')
     expect(call.content_id).toBe('mail:42:engaged')
     expect(call.text).toContain('Clicked in: X')
+    expect(call.text).not.toContain('Body')          // click stays a lightweight label
   })
 
   it('does NOT record awareness for delivered / bounced / complained', async () => {

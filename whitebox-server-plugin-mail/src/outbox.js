@@ -54,7 +54,7 @@ const ADVANCEABLE_FROM = Object.entries(STATUS_RANK)
   .filter(([, rank]) => rank < STATUS_RANK.complained)
   .map(([status]) => status)
 
-function stripHtml(html) {
+export function stripHtml(html) {
   if (!html) return ''
   return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -172,7 +172,6 @@ async function buildMessage(row) {
 async function recordSent(sentRow) {
   await notify('mail.sent', { type: 'mail.sent', data: sentRow })
   if (awareness && sentRow.passport_id) {
-    const body = sentRow.text || stripHtml(sentRow.html) || ''
     await awareness.record({
       passport_id: sentRow.passport_id,
       session_id: sentRow.session_id,
@@ -181,7 +180,10 @@ async function recordSent(sentRow) {
       direction: 'exposure',
       source: 'email',
       content_id: `outbox:${sentRow.id}`,
-      text: `Subject: ${sentRow.subject}\n\n${body}`,
+      // A send exposes the recipient only to the subject line (the inbox
+      // preview). The body enters awareness once they actually open it — see
+      // tracking.recordTrackedEvent, which records the open as exposure too.
+      text: sentRow.subject || '(no subject)',
       meta: {
         to: sentRow.to,
         from: sentRow.from,

@@ -13,11 +13,13 @@ const statusMap = {
   complained: 'complained',
 }
 
-// Status transitions that represent a user *expressing* engagement with the
-// email (not just delivery / failure). These get recorded into awareness so
-// they show up in /analytics/timeline + /analytics/ask alongside the original
-// send exposure. The user story interleaves "we sent X" with "they opened X".
-const ENGAGEMENT_STATUSES = new Set(['opened', 'engaged'])
+// Tracked transitions we mirror into awareness (not plain delivery / failure).
+// An *open* means the recipient was actually exposed to the full message, so
+// it's recorded as `exposure` carrying subject + body — the send only exposed
+// them to the subject (the inbox preview). A *click* ('engaged') is an active
+// signal, recorded as `expression`. They show up in /analytics/timeline +
+// /analytics/ask alongside the send, interleaving "we sent X" with "they read X".
+const RECORDED_STATUSES = new Set(['opened', 'engaged'])
 
 // Dependencies captured once via init() — module-level singletons, no
 // wrapping factory closure. Matches the core pattern.
@@ -30,21 +32,26 @@ export function init(deps) {
   ;({ notify, awareness, logger, provider } = deps)
 }
 
-async function recordEngagement(row, status) {
+async function recordTrackedEvent(row, status) {
   if (!awareness?.record) return
   if (!row?.passport_id) return                     // nothing to attach to
+  const opened  = status === 'opened'
+  const subject = row.subject || '(no subject)'
+  const body    = row.text || outbox.stripHtml(row.html) || ''
   try {
     await awareness.record({
       passport_id: row.passport_id,
       session_id:  row.session_id || null,
       ts:          new Date(),
       channel:     'mail',
-      direction:   'expression',                    // they engaged — not just received
+      // An open is exposure to the full content (subject + body); a click is an
+      // active expression — its body already entered awareness at the open.
+      direction:   opened ? 'exposure' : 'expression',
       source:      status,                          // 'opened' | 'engaged'
       // Stable id keyed to the outbox row + status, so a re-delivered webhook
       // for the same event hashes to the same content and dedupes naturally.
       content_id:  `mail:${row.id}:${status}`,
-      text:        `${status === 'engaged' ? 'Clicked in' : 'Opened'}: ${row.subject || '(no subject)'}`,
+      text:        opened ? `Subject: ${subject}\n\n${body}` : `Clicked in: ${subject}`,
       meta: {
         outbox_id:           row.id,
         provider_message_id: row.provider_message_id,
@@ -79,7 +86,7 @@ export async function handle(req, res) {
     })
     if (row) {
       await notify(`mail.${status}`, { type: `mail.${status}`, data: row })
-      if (ENGAGEMENT_STATUSES.has(status)) await recordEngagement(row, status)
+      if (RECORDED_STATUSES.has(status)) await recordTrackedEvent(row, status)
     }
   }
 
