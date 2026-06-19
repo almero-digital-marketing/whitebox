@@ -5,6 +5,9 @@
 import { engagement } from 'whitebox-server-plugin-engagement'
 import { analytics } from 'whitebox-server-plugin-analytics'
 import { audiences } from 'whitebox-server-plugin-audiences'
+import { meta } from 'whitebox-adnetworks-meta'
+import { tiktok } from 'whitebox-adnetworks-tiktok'
+import { google } from 'whitebox-adnetworks-google'
 
 export default async (runtime) => ({
   port: Number(process.env.WB_PORT || 3000),
@@ -37,27 +40,16 @@ export default async (runtime) => ({
         keepWarmDays: 7,            // re-fire cadence (must be < the audience window)
       },
 
-      // Per-network credentials + transport config. A network is "eligible" only
-      // when its secrets are present. See docs/05-networks.md.
-      networks: {
-        meta: {
-          enabled: true,
-          pixelId: process.env.WB_META_PIXEL_ID,
-          accessToken: process.env.WB_META_CAPI_TOKEN,
-          testEventCode: process.env.WB_META_TEST_EVENT_CODE, // optional, dev only
-        },
-        tiktok: {
-          enabled: true,
-          pixelCode: process.env.WB_TIKTOK_PIXEL_CODE,
-          accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN,
-        },
-        google: {
-          enabled: true,
-          // GA4 Measurement Protocol. See docs/networks/google-ga4.md.
-          measurementId: process.env.WB_GA4_MEASUREMENT_ID,
-          apiSecret: process.env.WB_GA4_API_SECRET,
-        },
-      },
+      // Composed network packages (each eligible only when its secrets are
+      // present). Import the factories at the top:
+      //   import { meta } from 'whitebox-adnetworks-meta'
+      //   import { tiktok } from 'whitebox-adnetworks-tiktok'
+      //   import { google } from 'whitebox-adnetworks-google'
+      networks: [
+        meta({ pixelId: process.env.WB_META_PIXEL_ID, accessToken: process.env.WB_META_CAPI_TOKEN, testEventCode: process.env.WB_META_TEST_EVENT_CODE }),
+        tiktok({ pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN }),
+        google({ measurementId: process.env.WB_GA4_MEASUREMENT_ID, apiSecret: process.env.WB_GA4_API_SECRET }),
+      ],
 
       // Privacy. See docs/08-consent-privacy.md.
       privacy: {

@@ -132,6 +132,9 @@ export default function whitebox(options = {}) {
     queue,
     getPassportId: () => passportId,
     getSessionId:  () => sessionId,
+    // Adopt a passport resolved out-of-band (e.g. a shortener claim binding the
+    // visitor to a known customer) so subsequent events run as that passport.
+    setPassportId(id) { if (id) { passportId = id; identity.setPassportId(id) } },
     // Convenience for plugins that want to expose an API onto the wb object.
     attach(name, api) { wb[name] = api; installed.set(name, api) },
   }

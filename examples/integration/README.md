@@ -35,7 +35,7 @@ One passport, one timeline — website reads and patient-portal actions land in 
      crm({ auth: { secret: process.env.WB_CRM_TOKEN } }),   // set WB_CRM_TOKEN in .env
      analytics({ auth: { secret: process.env.WB_ANALYTICS_TOKEN } }),
      voip({ /* … */ }),
-     conversions({ /* networks: {…} for ad-network fan-out — see below */ }),
+     conversions({ /* networks: [meta({…}), …] for ad-network fan-out — see below */ }),
    ]
    ```
    `conversions` works with no options (records server-side, fires client pixels); add a `networks` block to fan out to the ad networks — see [Conversion tracking → ad networks](#conversion-tracking--ad-networks).
@@ -82,13 +82,16 @@ Both read the **same env vars** — set them in `whitebox-server/.env` (the demo
 Then make the server fan out: your `whitebox-server/whitebox.config.js` must include `conversions` with a `networks` block (the committed `whitebox.config.example.js` already has it):
 
 ```js
+import { meta } from 'whitebox-adnetworks-meta'
+import { tiktok } from 'whitebox-adnetworks-tiktok'
+
 conversions({
   auth: { secret: process.env.WB_CONVERSIONS_TOKEN },
-  networks: {
-    meta:   { pixelId: process.env.WB_META_PIXEL_ID,      accessToken: process.env.WB_META_CAPI_TOKEN },
-    tiktok: { pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN },
-    // GA4 stays client-side (gtag) — leave the google adapter off.
-  },
+  networks: [
+    meta({ pixelId: process.env.WB_META_PIXEL_ID, accessToken: process.env.WB_META_CAPI_TOKEN }),
+    tiktok({ pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN }),
+    // GA4 stays client-side (gtag) — don't compose google() here.
+  ],
 })
 ```
 

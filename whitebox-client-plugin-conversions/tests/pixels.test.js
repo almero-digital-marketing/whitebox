@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import conversionsPlugin from '../src/index.js'
+import { meta } from 'whitebox-adnetworks-meta/client'
+import { google } from 'whitebox-adnetworks-google/client'
+import { tiktok } from 'whitebox-adnetworks-tiktok/client'
 
-// Build a fake core + install; return the attached API and captured server requests.
+// Compose the real per-network client packages; the demo/app does the same.
 function setup({ consented = true, networks, sst } = {}) {
   const requests = []
   const core = {
@@ -12,8 +15,7 @@ function setup({ consented = true, networks, sst } = {}) {
     getPassportId: () => 'p-123',
     attach: vi.fn(),
   }
-  const opts = {}
-  if (networks !== undefined) opts.networks = networks
+  const opts = { networks: networks ?? [meta(), google(), tiktok()] }
   if (sst !== undefined) opts.sst = sst
   conversionsPlugin(opts).install(core)
   return { api: core.attach.mock.calls[0][1], requests, core }
@@ -24,31 +26,19 @@ beforeEach(() => {
   window.gtag = vi.fn()
   window.ttq = { track: vi.fn() }
 })
-afterEach(() => {
-  delete window.fbq; delete window.gtag; delete window.ttq
-})
+afterEach(() => { delete window.fbq; delete window.gtag; delete window.ttq })
 
-describe('browser pixels — firing + mapping', () => {
-  it('fires fbq/gtag/ttq for a purchase with the shared event_id', async () => {
+describe('composed pixels — firing + mapping', () => {
+  it('fires meta/google/tiktok for a purchase with the shared event_id', async () => {
     const { api, requests } = setup()
     const { event_id, pixels } = await api.purchase({ value: 49.99, currency: 'USD', content_ids: ['sku-1'], num_items: 2 })
 
     expect(pixels.sort()).toEqual(['google', 'meta', 'tiktok'])
-
-    // Meta: standard name mapped, eventID === server event_id
     expect(window.fbq).toHaveBeenCalledWith('track', 'Purchase',
-      expect.objectContaining({ value: 49.99, currency: 'USD', content_ids: ['sku-1'], content_type: 'product' }),
-      { eventID: event_id })
-
-    // TikTok: CompletePayment, event_id matches
+      expect.objectContaining({ value: 49.99, currency: 'USD', content_ids: ['sku-1'], content_type: 'product' }), { eventID: event_id })
     expect(window.ttq.track).toHaveBeenCalledWith('CompletePayment',
-      expect.objectContaining({ value: 49.99, currency: 'USD' }), { event_id: event_id })
-
-    // GA4: gtag('event','purchase', …) — no id param (GA4 has no pixel↔MP dedup)
-    expect(window.gtag).toHaveBeenCalledWith('event', 'purchase',
-      expect.objectContaining({ value: 49.99, currency: 'USD' }))
-
-    // and the server still got the SST POST with the same id
+      expect.objectContaining({ value: 49.99, currency: 'USD' }), { event_id })
+    expect(window.gtag).toHaveBeenCalledWith('event', 'purchase', expect.objectContaining({ value: 49.99, currency: 'USD' }))
     expect(requests[0].opts.body.events[0].event_id).toBe(event_id)
   })
 
@@ -56,8 +46,7 @@ describe('browser pixels — firing + mapping', () => {
     const { api } = setup()
     await api.viewContent({ content_ids: ['a', 'b'] })
     expect(window.fbq).toHaveBeenCalledWith('track', 'ViewContent',
-      expect.objectContaining({ content_ids: ['a', 'b'], contents: [{ id: 'a', quantity: 1 }, { id: 'b', quantity: 1 }] }),
-      expect.any(Object))
+      expect.objectContaining({ content_ids: ['a', 'b'], contents: [{ id: 'a', quantity: 1 }, { id: 'b', quantity: 1 }] }), expect.any(Object))
     expect(window.gtag).toHaveBeenCalledWith('event', 'view_item',
       expect.objectContaining({ items: [{ item_id: 'a' }, { item_id: 'b' }] }))
   })
@@ -77,8 +66,8 @@ describe('browser pixels — firing + mapping', () => {
     expect(pixels.sort()).toEqual(['google', 'meta'])
   })
 
-  it('honors the networks allow-list (same names as the server)', async () => {
-    const { api } = setup({ networks: ['meta'] })
+  it('only fires the composed networks', async () => {
+    const { api } = setup({ networks: [meta()] })
     const { pixels } = await api.lead({})
     expect(pixels).toEqual(['meta'])
     expect(window.gtag).not.toHaveBeenCalled()
@@ -104,28 +93,27 @@ describe('browser pixels — firing + mapping', () => {
   it('threads transaction_id into the gtag purchase (GA4 dedup) and the server hit', async () => {
     const { api, requests } = setup()
     await api.purchase({ value: 10, currency: 'USD', transaction_id: 'ORD-42' })
-    expect(window.gtag).toHaveBeenCalledWith('event', 'purchase',
-      expect.objectContaining({ transaction_id: 'ORD-42' }))
+    expect(window.gtag).toHaveBeenCalledWith('event', 'purchase', expect.objectContaining({ transaction_id: 'ORD-42' }))
     expect(requests[0].opts.body.events[0].transaction_id).toBe('ORD-42')
   })
 
-  it('collects browser ad signals (spec-driven) and sends them in the POST', async () => {
+  it('collects each network\'s browser signals and sends them in the POST', async () => {
     document.cookie = '_ga=GA1.1.1234567890.1681000000'
     document.cookie = '_fbp=fb.1.1681000000.987654321'
     const { api, requests } = setup()
     await api.lead({})
     const sig = requests[0].opts.body.signals
-    expect(sig.ga_client_id).toBe('1234567890.1681000000')   // google spec, ga_cid transform
-    expect(sig.fbp).toBe('fb.1.1681000000.987654321')        // meta spec
+    expect(sig.ga_client_id).toBe('1234567890.1681000000')   // google.collect()
+    expect(sig.fbp).toBe('fb.1.1681000000.987654321')        // meta.collect()
   })
 
-  it('only collects signals for the selected networks', async () => {
-    document.cookie = '_ga=GA1.1.111.222'   // google signal present in the browser…
+  it('only collects signals for the composed networks', async () => {
+    document.cookie = '_ga=GA1.1.111.222'
     document.cookie = '_fbp=fb.1.5.9'
-    const { api, requests } = setup({ networks: ['meta'] })   // …but only meta is selected
+    const { api, requests } = setup({ networks: [meta()] })
     await api.lead({})
     const sig = requests[0].opts.body.signals
-    expect(sig.fbp).toBe('fb.1.5.9')        // meta spec collected
-    expect(sig.ga_client_id).toBeUndefined() // google spec NOT collected
+    expect(sig.fbp).toBe('fb.1.5.9')         // meta collected
+    expect(sig.ga_client_id).toBeUndefined() // google not composed
   })
 })

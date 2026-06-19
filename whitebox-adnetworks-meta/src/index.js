@@ -1,22 +1,21 @@
-// Meta adapter — Conversions API. Fires custom events (audiences) or standard
-// events (analytics, mapped via the taxonomy). Mode A.
+// Meta — server adapter (Conversions API). meta({ pixelId, accessToken }).
 
-import { resolveEventName } from '../taxonomy.js'
-import { pick } from '../identity.js'
-import { SIGNAL_SPECS } from '../networks.js'
+import { pick } from 'whitebox-adnetworks'
+import { name, signals, eventName } from './spec.js'
 
 const GRAPH = 'https://graph.facebook.com/v19.0'
 
-export function createMeta(cfg, { logger } = {}) {
-  const eligible = !!(cfg?.pixelId && cfg?.accessToken)
+export function meta(cfg = {}) {
+  const eligible = !!(cfg.pixelId && cfg.accessToken)
   return {
-    name: 'meta',
-    modes: ['event'],
+    name,
+    signals,
     eligible,
-    identitySpec: SIGNAL_SPECS.meta,
-    acceptedKeys: ['email', 'phone', 'fbp', 'fbc', 'external_id', 'client_ip_address', 'client_user_agent'],
+    modes: ['event'],
+    transport: 'capi',
 
     // canonical: { event | standard, event_id, ts, value?, currency?, content_ids? }
+    // ids:       { email_sha256, phone_sha256, external_id, signals{}, ip?, user_agent? }
     async sendEvent(canonical, ids) {
       if (!eligible) return { status: 'error', error: 'meta not configured' }
       const user_data = pick({
@@ -30,7 +29,7 @@ export function createMeta(cfg, { logger } = {}) {
       })
       const body = {
         data: [{
-          event_name: resolveEventName(canonical, 'meta'),
+          event_name: eventName(canonical),
           event_time: Math.floor(new Date(canonical.ts).getTime() / 1000),
           event_id: canonical.event_id,
           action_source: 'website',
@@ -43,7 +42,7 @@ export function createMeta(cfg, { logger } = {}) {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { logger?.warn?.({ json }, 'meta CAPI rejected'); return { status: 'rejected', error: json?.error?.message } }
+      if (!res.ok) return { status: 'rejected', error: json?.error?.message }
       return { status: 'accepted', matched_via: Object.keys(user_data) }
     },
   }

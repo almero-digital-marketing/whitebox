@@ -22,7 +22,6 @@ import * as consent from './consent.js'
 import * as service from './service.js'
 import * as rest from './rest.js'
 import * as mcpTools from './mcp.js'
-import { buildAdapters } from 'whitebox-adnetworks'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -48,7 +47,9 @@ export function audiences(options = {}) {
       identity.init({ db: ctx.db, passports: ctx.passports })
       consent.init({ db: ctx.db, passports: ctx.passports, config: cfg.privacy })
 
-      const adapters = buildAdapters(cfg.networks || {}, { logger })
+      // Composed network descriptors — [ meta({…}), tiktok({…}) ]. (enabled:false
+      // or an ineligible entry is simply skipped by delivery/manifest.)
+      const adapters = cfg.networks || []
 
       evaluator.init({
         awareness: ctx.awareness,   // recall() + population()

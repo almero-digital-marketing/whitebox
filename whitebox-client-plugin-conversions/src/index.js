@@ -35,10 +35,10 @@ function uuid() {
 export default function conversionsPlugin(options = {}) {
   // Conversions feed the ad networks → gate on marketing consent by default.
   // Pass requireConsent:false to send regardless, or change the category.
-  // networks: which networks fire browser pixels — same vocabulary as the server
-  // (a list ['meta','tiktok'] or { meta: true, … } map); default: all present.
+  // networks: composed client pixels — e.g. [ meta(), tiktok() ] from each
+  //   whitebox-adnetworks-<n>/client. Whichever are present on the page fire.
   // sst: also POST to the server (default true) — false ⇒ pixel-only, serverless.
-  const { consentCategory = 'marketing', requireConsent = true, networks: networkSelect, sst = true } = options
+  const { consentCategory = 'marketing', requireConsent = true, networks: networkSelect = [], sst = true } = options
 
   return {
     name: 'conversions',

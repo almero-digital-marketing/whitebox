@@ -1,19 +1,18 @@
-// TikTok adapter — Events API. Custom or standard events (mapped via taxonomy).
+// TikTok — server adapter (Events API). tiktok({ pixelCode, accessToken }).
 
-import { resolveEventName } from '../taxonomy.js'
-import { pick } from '../identity.js'
-import { SIGNAL_SPECS } from '../networks.js'
+import { pick } from 'whitebox-adnetworks'
+import { name, signals, eventName } from './spec.js'
 
 const EVENTS = 'https://business-api.tiktok.com/open_api/v1.3/event/track/'
 
-export function createTiktok(cfg, { logger } = {}) {
-  const eligible = !!(cfg?.pixelCode && cfg?.accessToken)
+export function tiktok(cfg = {}) {
+  const eligible = !!(cfg.pixelCode && cfg.accessToken)
   return {
-    name: 'tiktok',
-    modes: ['event'],
+    name,
+    signals,
     eligible,
-    identitySpec: SIGNAL_SPECS.tiktok,
-    acceptedKeys: ['email', 'phone', 'ttclid', 'ttp', 'ip', 'user_agent'],
+    modes: ['event'],
+    transport: 'events',
 
     async sendEvent(canonical, ids) {
       if (!eligible) return { status: 'error', error: 'tiktok not configured' }
@@ -28,7 +27,7 @@ export function createTiktok(cfg, { logger } = {}) {
       const body = {
         event_source: 'web', event_source_id: cfg.pixelCode,
         data: [{
-          event: resolveEventName(canonical, 'tiktok'),
+          event: eventName(canonical),
           event_time: Math.floor(new Date(canonical.ts).getTime() / 1000),
           event_id: canonical.event_id,
           user,
@@ -41,7 +40,7 @@ export function createTiktok(cfg, { logger } = {}) {
         body: JSON.stringify(body),
       })
       const json = await res.json().catch(() => ({}))
-      if (json?.code !== 0) { logger?.warn?.({ json }, 'tiktok events rejected'); return { status: 'rejected', error: json?.message } }
+      if (json?.code !== 0) return { status: 'rejected', error: json?.message }
       return { status: 'accepted', matched_via: Object.keys(user) }
     },
   }

@@ -15,8 +15,14 @@ import { engagement } from 'whitebox-server-plugin-engagement'
 import { crm } from 'whitebox-server-plugin-crm'
 import { analytics } from 'whitebox-server-plugin-analytics'
 import { conversions } from 'whitebox-server-plugin-conversions'
+import { shortener } from 'whitebox-server-plugin-shortener'
 import { voip } from 'whitebox-server-plugin-voip'
 import { mail } from 'whitebox-server-plugin-mail'
+
+// Ad networks compose like plugins — one self-contained package each.
+import { meta } from 'whitebox-adnetworks-meta'
+import { tiktok } from 'whitebox-adnetworks-tiktok'
+// import { google } from 'whitebox-adnetworks-google'   // server GA4 — see note below
 
 export default async (runtime) => ({
   port: Number(process.env.WB_PORT || 3000),
@@ -80,15 +86,24 @@ export default async (runtime) => ({
     // event_id. With no networks configured it records into awareness only.
     conversions({
       auth: { secret: process.env.WB_CONVERSIONS_TOKEN },   // Bearer for the GET audit endpoint (optional)
-      networks: {
-        meta:   { pixelId: process.env.WB_META_PIXEL_ID,      accessToken: process.env.WB_META_CAPI_TOKEN },
-        tiktok: { pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN },
-        // GA4 is handled CLIENT-SIDE via the gtag pixel (easier to debug in the
-        // browser, and GA4 has no pixel↔MP event_id dedup). Do NOT enable the
-        // server `google` MP adapter alongside client gtag — non-purchase events
-        // would double-count. Use it only for a server-ONLY GA4 setup.
-        // google: { measurementId: process.env.WB_GA4_MEASUREMENT_ID, apiSecret: process.env.WB_GA4_API_SECRET },
-      },
+      // Compose the server-side (SST) networks. No networks ⇒ records into
+      // awareness only. Each is a self-contained package called with its creds.
+      networks: [
+        meta({ pixelId: process.env.WB_META_PIXEL_ID, accessToken: process.env.WB_META_CAPI_TOKEN }),
+        tiktok({ pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN }),
+        // GA4 is handled CLIENT-SIDE via the gtag pixel (no pixel↔MP event_id
+        // dedup). Don't add google() here alongside client gtag — non-purchase
+        // events would double-count. Use it only for a server-ONLY GA4 setup.
+        // google({ measurementId: process.env.WB_GA4_MEASUREMENT_ID, apiSecret: process.env.WB_GA4_API_SECRET }),
+      ],
+    }),
+
+    // Short links served on their own host (baseUrl's hostname gates the bare
+    // /:code redirect — point a vhost at this same server). A personalized link
+    // hard-binds the clicker's session to its passport; the id never hits a URL.
+    shortener({
+      baseUrl: process.env.WB_SHORTENER_BASEURL || 'https://go.example.com',
+      auth: { secret: process.env.WB_SHORTENER_TOKEN },   // Bearer for POST /shortener/links
     }),
 
     voip({

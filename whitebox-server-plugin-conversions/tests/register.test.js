@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import express from 'express'
 import { conversions } from '../src/index.js'
+import { meta } from 'whitebox-adnetworks-meta'
 
 function makeMcp() {
   const tools = new Map(), resources = new Map()
@@ -30,8 +31,8 @@ describe('conversions plugin — register', () => {
       db: {}, passports: { identities: vi.fn(async () => []) },
       awareness: { record: vi.fn() }, logger,
     }
-    // meta block present but missing accessToken ⇒ adapter ineligible, no throw.
-    const { reporter } = await conversions({ networks: { meta: { pixelId: 'x' } } }).register(express(), ctx)
-    expect(reporter.networks().every(n => !n.eligible)).toBe(true)
+    // meta composed but missing accessToken ⇒ ineligible, no throw.
+    const { reporter } = await conversions({ networks: [meta({ pixelId: 'x' })] }).register(express(), ctx)
+    expect(reporter.networks()).toEqual([expect.objectContaining({ name: 'meta', eligible: false })])
   })
 })

@@ -1,0 +1,21 @@
+{
+  "name": "whitebox-adnetworks-meta",
+  "version": "0.1.0",
+  "description": "WhiteBox ad-network: Meta (Conversions API server-side + Pixel client-side). Self-contained — event map, signal specs, server adapter, browser pixel — composed into the conversions/audiences plugins.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./spec": "./src/spec.js"
+  },
+  "files": ["src", "README.md"],
+  "sideEffects": false,
+  "scripts": { "test": "vitest run" },
+  "dependencies": {
+    "whitebox-adnetworks": "^0.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}

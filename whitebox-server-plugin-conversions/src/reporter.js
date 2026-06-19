@@ -5,10 +5,12 @@
 // This is the standard-event fan-out that used to live (dormant) in the
 // analytics plugin — its natural home is here, next to /conversions/events.
 
-import { buildAdapters, hashEmail, hashPhone, composeManifest } from 'whitebox-adnetworks'
+import { hashEmail, hashPhone, composeManifest } from 'whitebox-adnetworks'
 
-export function createReporter({ networks = {}, passports, logger }) {
-  const adapters = buildAdapters(networks, { logger })
+// networks: composed server descriptors — [ meta({…}), google({…}), … ] —
+// each { name, signals, eligible, sendEvent }. No central registry.
+export function createReporter({ networks = [], passports, logger }) {
+  const adapters = networks
 
   // Hashed PII comes from passport identities (never from awareness text, which
   // is redacted). external_id falls back to the passport id so even an anonymous

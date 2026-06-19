@@ -511,38 +511,10 @@ Tests mount the plugin on a fresh Express app with a mocked awareness module. No
 
 Keep these endpoints separate from the retrieval primitives so consumers can pick their abstraction level.
 
-## Ad-network reporting (standard events)
+## Ad-network reporting
 
-Analytics can report **standard conversion events** (`purchase`, `lead`, `view_content`, …) to Meta,
-TikTok and Google (GA4) through the shared [`whitebox-adnetworks`](../whitebox-adnetworks) adapters —
-the same transport the `audiences` plugin uses for custom events.
-
-Configure networks under `config.analytics.networks` (same shape as the audiences plugin):
-
-```js
-analytics: {
-  networks: {
-    meta:   { enabled: true, pixelId: process.env.WB_META_PIXEL_ID, accessToken: process.env.WB_META_CAPI_TOKEN },
-    tiktok: { enabled: true, pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN },
-    google: { enabled: true, measurementId: process.env.WB_GA4_MEASUREMENT_ID, apiSecret: process.env.WB_GA4_API_SECRET },
-  },
-}
-```
-
-The plugin exposes a reporter on its api. Call it from your conversion handler — **after** checking
-marketing consent:
-
-```js
-// ctx.plugins.analytics.reportStandardEvent(passportId, canonical, opts)
-await ctx.plugins.analytics.reportStandardEvent(passportId, {
-  standard: 'purchase', event_id: order.id, value: order.total, currency: 'USD', content_ids: order.skus,
-}, { signals /* fbp/ttclid/ga_client_id from the client */, ip, user_agent })
-// → { meta:'accepted', tiktok:'accepted', google:'accepted' }
-```
-
-The taxonomy maps `standard` to each network's name (`purchase` → Meta `Purchase`, TikTok
-`CompletePayment`, GA4 `purchase`). PII is hashed, `event_id` dedups against the browser pixel.
-
-**Out of scope here (by design):** the *trigger* (what conversion fires which event) and the
-*consent gate* are the caller's responsibility — wire them in your conversion source. See
-`whitebox-adnetworks/README.md` for the full contract.
+Analytics is purely query/recall over awareness. **Conversion reporting to the ad
+networks moved to [`whitebox-server-plugin-conversions`](../whitebox-server-plugin-conversions)**,
+which receives `/conversions/events` and fans out to composed network packages
+(`whitebox-adnetworks-meta` / `-google` / `-tiktok`), deduped against the browser
+pixels by `event_id`.

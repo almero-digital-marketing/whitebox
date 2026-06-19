@@ -39,32 +39,31 @@ so client pixels, server CAPI, and awareness can't disagree about shape.
 ## Options
 
 ```js
+import { meta }   from 'whitebox-adnetworks-meta/client'
+import { google } from 'whitebox-adnetworks-google/client'
+import { tiktok } from 'whitebox-adnetworks-tiktok/client'
+
 conversions({
-  consentCategory: 'marketing',          // consent category that gates sends (default)
-  requireConsent: true,                  // false ⇒ send regardless of consent
-  networks: ['meta', 'google', 'tiktok'],// which networks fire pixels (default: all present)
-  sst: true,                             // also POST to the server (false ⇒ pixels only)
+  consentCategory: 'marketing',            // consent category that gates sends (default)
+  requireConsent: true,                    // false ⇒ send regardless of consent
+  networks: [ meta(), google(), tiktok() ],// composed client pixels — fire whichever is present
+  sst: true,                               // also POST to the server (false ⇒ pixels only)
 })
 ```
 
-`networks` uses the **same canonical names as the server** (`meta`/`google`/`tiktok`)
-— accepts a list, or a `{ meta: true, google: false, … }` map. Each side configures
-its own leg: the client picks which networks fire pixels, the server picks which
-fire SST. See `whitebox-adnetworks/networks`.
+`networks` is composed from each network package's `/client` entry — the same
+packages the server composes (with creds). Whichever pixels are actually present
+on the page fire; a missing one is a no-op.
 
 ## Signals
 
-On each send the plugin collects the browser-only ad cookies the server APIs
-match on — `_ga` (→ GA4 `client_id`, **required** by the Measurement Protocol),
-`_fbp`/`_fbc`, `_ttp`/`ttclid`, `gclid` — and includes them in the POST so the
-server-side CAPI/MP hits can match the user. See [signals.js](src/signals.js).
+On each send the plugin unions each composed network's `collect()` — the
+browser-only ad cookies its server API matches on (Meta `_fbp`/`_fbc`, GA4
+`_ga` → `client_id`, TikTok `_ttp`/`ttclid`) — and includes them in the POST so
+the server-side CAPI/MP hits can match the user. See [signals.js](src/signals.js).
 
-Collection is **spec-driven, not hardcoded**: it reads the declarative
-`SIGNAL_SPECS` in `whitebox-adnetworks/networks` — the same `identitySpec`s the
-server adapters expose (and `composeManifest()` unions). Add a network's signal
-there once and both the server adapter and this collector pick it up. Only the
-selected networks' signals are collected (so `networks: ['meta']` harvests
-`_fbp`/`_fbc` but not `_ga`).
+Each network owns its own cookies + transforms in its package, so this is just a
+merge over the composed networks — only the networks you compose are collected.
 
 ## Dedup & GA4
 

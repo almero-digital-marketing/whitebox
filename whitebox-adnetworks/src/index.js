@@ -1,22 +1,19 @@
-// whitebox-adnetworks — shared ad-network transport.
+// whitebox-adnetworks — the shared kernel for ad-network conversion tracking.
 //
-// The adapter contract (data + one method):
-//   { name, modes, eligible, transport?, identitySpec[], acceptedKeys[],
-//     async sendEvent(canonical, ids) → { status, matched_via?, error? } }
+// Per-network specifics (event-name maps, signal specs, the CAPI/MP/Events-API
+// adapter, and the browser pixel) live in their own packages —
+// whitebox-adnetworks-meta / -google / -tiktok — and are COMPOSED as factories:
 //
-//   canonical : { event | standard, event_id, ts, value?, currency?, content_ids?, ... }
-//               - { event: 'wb_high_intent' }   custom event   (audiences)
-//               - { standard: 'purchase', value, currency }   standard event (analytics)
-//   ids       : { email_sha256, phone_sha256, external_id, signals{}, ip?, user_agent? }
+//   server:  conversions({ networks: [ meta({ pixelId, accessToken }), … ] })
+//   client:  conversions({ networks: [ meta(), tiktok() ] })   // from `/client`
 //
-// Consumers resolve a passport → ids (hashing via this package) and gate on
-// consent themselves; the adapters just fire.
+// A composed network descriptor:
+//   server  { name, signals[], eligible, async sendEvent(canonical, ids) }
+//   client  { name, signals[], present(), collect(), fire(kind, name, payload, eventId) }
+//
+// This package holds only the cross-network kernel: the canonical event
+// vocabulary, the payload schemas, and identity hashing / manifest composition.
 
-export { buildAdapters } from './adapters/index.js'
-export { NETWORK_NAMES, PIXEL_GLOBAL, SIGNAL_SPECS, selectedNetworks, signalSpecs } from './networks.js'
-export { STANDARD_EVENTS, resolveEventName } from './taxonomy.js'
+export { CANONICAL_EVENTS } from './events.js'
+export { EVENT_SCHEMAS, CONVERSION_EVENTS, baseEventSchema, validateEvent, validateCustom } from './schemas.js'
 export { hashEmail, hashPhone, sha256, composeManifest, pick } from './identity.js'
-
-export { createMeta } from './adapters/meta.js'
-export { createTiktok } from './adapters/tiktok.js'
-export { createGoogle } from './adapters/google.js'

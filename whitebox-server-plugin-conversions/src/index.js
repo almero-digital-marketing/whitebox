@@ -44,7 +44,7 @@ export function conversions(options = {}) {
         ? createAuth({ secret: options.auth.secret, logger })
         : (req, res) => res.status(401).json({ error: 'conversions: set auth.secret to use the audit endpoint' })
 
-      const reporter = createReporter({ networks: options.networks || {}, passports, logger })
+      const reporter = createReporter({ networks: options.networks || [], passports, logger })
 
       // Consent gate for ad-network fan-out. The client already gates on
       // marketing consent before sending, so the default is to honour that

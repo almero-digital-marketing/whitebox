@@ -12,7 +12,7 @@
 // semantic params.
 
 import { z } from 'zod'
-import { STANDARD_EVENTS } from './taxonomy.js'
+import { CANONICAL_EVENTS } from './events.js'
 
 const currency = z.string().regex(/^[A-Za-z]{3}$/, 'ISO-4217 3-letter currency code')
 
@@ -52,10 +52,10 @@ const OVERRIDES = {
   purchase: purchaseSchema,
 }
 
-// One schema per canonical event in the taxonomy — keys stay in lock-step with
-// STANDARD_EVENTS, so a new taxonomy entry automatically gets a schema + method.
+// One schema per canonical event — keys stay in lock-step with CANONICAL_EVENTS,
+// so a new event automatically gets a schema + a client method.
 export const EVENT_SCHEMAS = Object.fromEntries(
-  Object.keys(STANDARD_EVENTS).map(name => [name, OVERRIDES[name] || baseEventSchema]),
+  CANONICAL_EVENTS.map(name => [name, OVERRIDES[name] || baseEventSchema]),
 )
 
 export const CONVERSION_EVENTS = Object.keys(EVENT_SCHEMAS)

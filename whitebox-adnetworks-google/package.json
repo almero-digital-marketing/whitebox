@@ -1,0 +1,21 @@
+{
+  "name": "whitebox-adnetworks-google",
+  "version": "0.1.0",
+  "description": "WhiteBox ad-network: Google GA4 (Measurement Protocol server-side + gtag client-side). Self-contained — event map, signals, server adapter, browser pixel.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./spec": "./src/spec.js"
+  },
+  "files": ["src", "README.md"],
+  "sideEffects": false,
+  "scripts": { "test": "vitest run" },
+  "dependencies": {
+    "whitebox-adnetworks": "^0.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}

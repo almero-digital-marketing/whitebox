@@ -7,8 +7,7 @@
   "exports": {
     ".": "./src/index.js",
     "./schemas": "./src/schemas.js",
-    "./taxonomy": "./src/taxonomy.js",
-    "./networks": "./src/networks.js"
+    "./browser": "./src/browser.js"
   },
   "files": [
     "src",

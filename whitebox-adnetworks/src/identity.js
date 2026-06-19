@@ -11,15 +11,15 @@ export const hashEmail = e => e ? sha256(String(e).trim().toLowerCase()) : null
 // Phone → E.164 digits (prefix the country code upstream), then hash.
 export const hashPhone = p => p ? sha256(String(p).replace(/[^\d]/g, '')) : null
 
-// Union of every eligible adapter's identitySpec → the declarative manifest the
+// Union of every eligible network's signal specs → the declarative manifest the
 // client capture shim reads. Declarative only (source + named transform), never
-// executable code.
-export function composeManifest(adapters) {
+// executable code. Accepts composed network descriptors ({ signals }).
+export function composeManifest(networks) {
   const seen = new Set()
   const collect = []
-  for (const a of adapters) {
-    if (!a.eligible) continue
-    for (const spec of a.identitySpec || []) {
+  for (const n of networks) {
+    if (n.eligible === false) continue
+    for (const spec of (n.signals || n.identitySpec || [])) {
       if (seen.has(spec.key)) continue
       seen.add(spec.key)
       collect.push(spec)

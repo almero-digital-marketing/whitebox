@@ -15,6 +15,9 @@ import engagementPlugin from 'whitebox-client-plugin-engagement'
 import crmPlugin from 'whitebox-client-plugin-crm'
 import voipPlugin from 'whitebox-client-plugin-voip'
 import conversionsPlugin from 'whitebox-client-plugin-conversions'
+import { meta } from 'whitebox-adnetworks-meta/client'
+import { google } from 'whitebox-adnetworks-google/client'
+import { tiktok } from 'whitebox-adnetworks-tiktok/client'
 
 const logEl = document.querySelector('#log')
 const statusEl = document.querySelector('#status')
@@ -68,7 +71,7 @@ const wb = whitebox({
     // page (Meta/TikTok/GA4) AND POSTs to /conversions/events, one shared
     // event_id, gated on marketing consent. Networks fire wherever they're
     // configured (browser pixel + server creds) — see the README.
-    conversionsPlugin(),
+    conversionsPlugin({ networks: [meta(), google(), tiktok()] }),
   ],
 })
 window.wb = wb

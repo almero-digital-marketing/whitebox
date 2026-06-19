@@ -11,23 +11,26 @@ against the browser pixels by `event_id`**.
 
 ```js
 import { conversions } from 'whitebox-server-plugin-conversions'
+import { meta } from 'whitebox-adnetworks-meta'
+import { tiktok } from 'whitebox-adnetworks-tiktok'
 
 conversions({
   auth: { secret: process.env.WB_CONVERSIONS_TOKEN },   // Bearer for GET /conversions/events
-  networks: {
-    meta:   { pixelId: process.env.WB_META_PIXEL_ID,  accessToken: process.env.WB_META_CAPI_TOKEN },
-    google: { measurementId: process.env.WB_GA4_MEASUREMENT_ID, apiSecret: process.env.WB_GA4_API_SECRET },
-    tiktok: { pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN },
-  },
+  // Compose the server-side (SST) networks — each a self-contained package
+  // called with its creds. (GA4 is usually client-gtag only — see Dedup below.)
+  networks: [
+    meta({ pixelId: process.env.WB_META_PIXEL_ID, accessToken: process.env.WB_META_CAPI_TOKEN }),
+    tiktok({ pixelCode: process.env.WB_TIKTOK_PIXEL_CODE, accessToken: process.env.WB_TIKTOK_EVENTS_TOKEN }),
+  ],
   // Optional server-side consent enforcement (the client already gates on
   // marketing consent before sending, so this is OFF by default):
   // consent: { require: true, check: async (passportId) => /* … */ true },
 })
 ```
 
-A network is only fired when its credentials are present (`eligible`). With no
-networks configured the plugin still records conversions into awareness — it
-just doesn't forward anywhere.
+A network only fires when its credentials are present (`eligible`). With no
+networks composed the plugin still records conversions into awareness — it just
+doesn't forward anywhere.
 
 ## Endpoints
 
