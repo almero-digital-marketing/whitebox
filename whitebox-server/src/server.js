@@ -24,7 +24,7 @@ import * as templates from './templates.js'
 import * as awareness from './awareness/index.js'
 import * as context from './context.js'
 import * as mcp from './mcp.js'
-import createAuth from './auth.js'
+import createAuth, { resolveMcpAuth } from './auth.js'
 import { register as registerHealth } from './health.js'
 import { load as loadPlugins } from './plugins.js'
 
@@ -115,12 +115,10 @@ async function start() {
 
   // Mount MCP transport AFTER plugins have registered their tools/resources,
   // so the server's capability list is complete before the first client
-  // connection. Auth is optional — omitted iff config.mcp.auth.secret is
-  // unset, which is fine for local development. Production should always
-  // configure a secret.
-  const mcpAuth = config.mcp?.auth?.secret
-    ? createAuth({ secret: config.mcp.auth.secret, logger })
-    : null
+  // connection. config.mcp.auth is a pluggable verifier — a static secret
+  // (string / { secret }) by default, or a composed one like
+  // auth0({ … }) from an external package. Omitted ⇒ no auth (dev only).
+  const mcpAuth = resolveMcpAuth(config.mcp?.auth, { logger })
   await mcp.mount(app, { path: config.mcp?.path ?? '/mcp', auth: mcpAuth })
 
   await new Promise((resolve, reject) => {

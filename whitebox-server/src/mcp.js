@@ -127,7 +127,26 @@ export async function mount(app, { path = '/mcp', auth } = {}) {
   })
   await server.connect(transport)
 
-  const middlewares = auth ? [auth] : []
+  // `auth` is a verifier: { middleware, authorizationServers?, resource?, scopesSupported? }.
+  const gate = auth?.middleware || (typeof auth === 'function' ? auth : null)
+  const middlewares = gate ? [gate] : []
+
+  // OAuth 2.0 Protected Resource Metadata (RFC 9728) — when the verifier
+  // advertises an authorization server, expose discovery so MCP clients can
+  // run the login flow themselves. Public (no gate).
+  if (auth?.authorizationServers?.length) {
+    app.get('/.well-known/oauth-protected-resource', (req, res) => {
+      const origin = `${req.protocol}://${req.get('host')}`
+      res.json({
+        resource: auth.resource || `${origin}${path}`,
+        authorization_servers: auth.authorizationServers,
+        bearer_methods_supported: ['header'],
+        scopes_supported: auth.scopesSupported || [],
+      })
+    })
+    logger?.info?.('MCP OAuth discovery at /.well-known/oauth-protected-resource (AS: %s)', auth.authorizationServers.join(', '))
+  }
+
   app.post(path,   ...middlewares, (req, res) => transport.handleRequest(req, res, req.body))
   app.get(path,    ...middlewares, (req, res) => transport.handleRequest(req, res))
   app.delete(path, ...middlewares, (req, res) => transport.handleRequest(req, res))

@@ -42,6 +42,26 @@ This is a monorepo (npm workspaces) — each package publishes independently.
 | [`whitebox-client-plugin-engagement`](whitebox-client-plugin-engagement) | Reading / viewing / watching trackers |
 | [`whitebox-client-plugin-conversions`](whitebox-client-plugin-conversions) | Conversion events |
 
+## Integrations
+
+Third-party adapters live in **their own repos**, not this monorepo. Each is a self-contained package that composes into config like a plugin — ad networks (Meta/Google/TikTok Conversions APIs + pixels) and MCP auth providers (Auth0 and other OAuth resource-server verifiers):
+
+| package | composes into | what it does |
+|---|---|---|
+| `whitebox-adnetworks-meta` · `-google` · `-tiktok` | `conversions({ networks: […] })` | server CAPI fan-out (`.`) + browser pixel (`/client`), deduped by `event_id` |
+| `whitebox-server-auth-auth0` | `mcp: { auth: auth0({…}) }` | JWT/OAuth verifier for the `/mcp` endpoint + RFC 9728 discovery |
+
+The shared kernel [`whitebox-adnetworks`](whitebox-adnetworks) (zod schemas, canonical events, identity helpers) and the pluggable MCP auth seam in [`whitebox-server`](whitebox-server) stay in-tree; only the provider specifics live outside.
+
+To develop against them, clone each into `./integrations` — the `integrations/*` workspace glob links them locally, and the folder is gitignored so the monorepo tracks none of their source:
+
+```bash
+git clone <integration-repo> integrations/whitebox-adnetworks-meta
+npm install          # the integrations/* glob picks up whatever is present
+```
+
+> A clone with an empty `integrations/` builds and tests fine — only the example configs that import a provider need it present. Use `npm install` (not `npm ci`) after adding integrations, since the lockfile reflects whatever is linked.
+
 ## Develop
 
 ```bash

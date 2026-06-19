@@ -8,9 +8,9 @@
     "whitebox-server",
     "whitebox-client",
     "whitebox-adnetworks",
-    "whitebox-adnetworks-*",
     "whitebox-server-plugin-*",
-    "whitebox-client-plugin-*"
+    "whitebox-client-plugin-*",
+    "integrations/*"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",

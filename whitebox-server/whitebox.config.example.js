@@ -65,6 +65,19 @@ export default async (runtime) => ({
     },
   },
 
+  // MCP endpoint + auth. `auth` is a pluggable verifier: a static Bearer secret
+  // by default (string or { secret }), or a composed one from an external
+  // package. For Auth0, add at the top:
+  //   import { auth0 } from 'whitebox-server-auth-auth0'
+  // and set: auth: auth0({ domain: process.env.AUTH0_DOMAIN,
+  //                        audience: 'https://whitebox/mcp', scope: 'mcp:use' })
+  // (that also serves /.well-known/oauth-protected-resource so MCP clients can
+  // log in via Auth0 themselves). Omit `auth` entirely for no auth (dev only).
+  mcp: {
+    path: '/mcp',
+    auth: process.env.WB_MCP_TOKEN,   // string → Bearer; swap for auth0({…})
+  },
+
   // Each entry is a built plugin object. Options passed to the factory are the
   // plugin's config — there is no separate top-level block to keep in sync.
   plugins: [

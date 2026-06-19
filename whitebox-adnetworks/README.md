@@ -1,11 +1,12 @@
 # whitebox-adnetworks
 
 The shared **kernel** for ad-network conversion tracking. Per-network specifics
-live in their own self-contained packages and are **composed** like plugins:
+live in their **own self-contained repos** (each released independently; clone
+into `./integrations` for local dev) and are **composed** like plugins:
 
-- [`whitebox-adnetworks-meta`](../whitebox-adnetworks-meta) — Meta (Conversions API + Pixel)
-- [`whitebox-adnetworks-google`](../whitebox-adnetworks-google) — GA4 (Measurement Protocol + gtag)
-- [`whitebox-adnetworks-tiktok`](../whitebox-adnetworks-tiktok) — TikTok (Events API + Pixel)
+- `whitebox-adnetworks-meta` — Meta (Conversions API + Pixel)
+- `whitebox-adnetworks-google` — GA4 (Measurement Protocol + gtag)
+- `whitebox-adnetworks-tiktok` — TikTok (Events API + Pixel)
 
 Each owns everything about its network — the canonical→network event map, the
 browser signal specs, the server adapter, and the client pixel — and is called
