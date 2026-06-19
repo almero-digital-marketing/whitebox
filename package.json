@@ -9,12 +9,13 @@
     "whitebox-client",
     "whitebox-adnetworks",
     "whitebox-server-plugin-*",
-    "whitebox-client-plugin-*",
-    "integrations/*"
+    "whitebox-client-plugin-*"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",
-    "test:server": "npm test --workspace=whitebox-server"
+    "test:server": "npm test --workspace=whitebox-server",
+    "link:integrations": "bash scripts/link-integrations.sh",
+    "postinstall": "bash scripts/link-integrations.sh"
   },
   "engines": {
     "node": ">=18"

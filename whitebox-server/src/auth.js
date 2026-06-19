@@ -34,7 +34,7 @@ export default createAuth
 // An auth "verifier" is a provider-agnostic descriptor:
 //   { middleware, authorizationServers?, resource?, scopesSupported? }
 // The static secret is one verifier (`bearer`); external packages (e.g.
-// whitebox-server-auth-auth0) ship others. Nothing here is provider-specific.
+// whitebox-auth-auth0) ship others. Nothing here is provider-specific.
 
 // The static-secret verifier.
 export const bearer = (opts) => ({ middleware: createAuth(opts) })

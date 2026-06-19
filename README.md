@@ -50,18 +50,20 @@ Third-party adapters live in **their own repos**, not this monorepo. Each is a s
 |---|---|---|
 | `whitebox-adnetworks-meta` · `-google` · `-tiktok` | `conversions({ networks: […] })` | server CAPI fan-out (`.`) + browser pixel (`/client`), deduped by `event_id` |
 | `whitebox-mail-mailgun` · `whitebox-mail-postmark` | `mail({ provider: … })` | send + transport, inbound/tracking webhook parsing, webhook signature verification |
-| `whitebox-server-auth-auth0` | `mcp: { auth: auth0({…}) }` | JWT/OAuth verifier for the `/mcp` endpoint + RFC 9728 discovery |
+| `whitebox-auth-auth0` | `mcp: { auth: auth0({…}) }` | JWT/OAuth verifier for the `/mcp` endpoint + RFC 9728 discovery |
 
 The shared kernel [`whitebox-adnetworks`](whitebox-adnetworks) (zod schemas, canonical events, identity helpers), the mail plugin's provider seam, and the pluggable MCP auth seam in [`whitebox-server`](whitebox-server) stay in-tree; only the provider specifics live outside.
 
-To develop against them, clone each into `./integrations` — the `integrations/*` workspace glob links them locally, and the folder is gitignored so the monorepo tracks none of their source:
+Integrations live in a **sibling directory outside the monorepo** (default `../whitebox-integrations/`, override with `WB_INTEGRATIONS_DIR`) so they're never part of the monorepo's working tree or git. Clone the ones you need there, then link them in:
 
 ```bash
-git clone <integration-repo> integrations/whitebox-adnetworks-meta
-npm install          # the integrations/* glob picks up whatever is present
+git clone <integration-repo> ../whitebox-integrations/whitebox-adnetworks-meta
+npm install          # `postinstall` runs scripts/link-integrations.sh
+# or re-link any time without a full install:
+npm run link:integrations
 ```
 
-> A clone with an empty `integrations/` builds and tests fine — only the example configs that import a provider need it present. Use `npm install` (not `npm ci`) after adding integrations, since the lockfile reflects whatever is linked.
+`scripts/link-integrations.sh` symlinks each present integration into `node_modules` (bridging the `whitebox-adnetworks` kernel into the ad-network packages, which is their only unpublished dependency). It's idempotent and a no-op when the directory is absent — a clone with no integrations builds and tests fine; only example configs that import a provider need it present.
 
 ## Develop
 

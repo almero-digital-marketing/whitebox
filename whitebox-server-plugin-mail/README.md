@@ -6,7 +6,7 @@
 
 The email **handshake** for whitebox: outbound sending (transactional + bulk), inbound capture (contact forms and email replies), tracking-webhook ingestion, and the two block lists every production sender needs (unsubscribed / hard-bounced).
 
-The **email service provider is pluggable** — this plugin owns the outbox/queue/suppressions/awareness plumbing, and a composed provider package owns the transport, webhook authenticity, and payload shapes. [`whitebox-mail-mailgun`](../integrations/whitebox-mail-mailgun) and [`whitebox-mail-postmark`](../integrations/whitebox-mail-postmark) ship today; adding another is a new package implementing the same small contract, not a change here.
+The **email service provider is pluggable** — this plugin owns the outbox/queue/suppressions/awareness plumbing, and a composed provider package owns the transport, webhook authenticity, and payload shapes. `whitebox-mail-mailgun` and `whitebox-mail-postmark` (each its own external repo) ship today; adding another is a new package implementing the same small contract, not a change here.
 
 It's not a thread tracker. The company's real email client owns multi-turn conversations — this plugin captures the *first* and *last* hop of each touch (we sent X, they replied Y) and routes anything in between as a forward to a designated company inbox. The point isn't to replace the inbox, it's to make the messages part of the customer's awareness profile.
 
@@ -152,7 +152,7 @@ src/plugins/mail/
     └── 013 outbox_provider_message_id  (renames mailgun_id → provider_message_id)
 ```
 
-The provider-specific code (transport, webhook signature, payload parsing) lives **outside** this package — in [`whitebox-mail-mailgun`](../integrations/whitebox-mail-mailgun) / [`whitebox-mail-postmark`](../integrations/whitebox-mail-postmark) — each implementing: `send(msg)→{messageId}`, `verifySignature(req, kind)`, `parseInbound(req)`, `parseTracking(req)`, and optionally `ownsAddress` / `classifyError`.
+The provider-specific code (transport, webhook signature, payload parsing) lives **outside** this package — in the external `whitebox-mail-mailgun` / `whitebox-mail-postmark` repos — each implementing: `send(msg)→{messageId}`, `verifySignature(req, kind)`, `parseInbound(req)`, `parseTracking(req)`, and optionally `ownsAddress` / `classifyError`.
 
 ## Core flows
 

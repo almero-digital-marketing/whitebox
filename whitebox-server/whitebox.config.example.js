@@ -20,7 +20,8 @@ import { voip } from 'whitebox-server-plugin-voip'
 import { mail } from 'whitebox-server-plugin-mail'
 
 // Ad networks and the mail provider compose like plugins — one self-contained,
-// independently-released package each (kept under ./integrations for local dev).
+// independently-released package each, living in their own repos outside this
+// monorepo (see ../whitebox-integrations + `npm run link:integrations`).
 import { meta } from 'whitebox-adnetworks-meta'
 import { tiktok } from 'whitebox-adnetworks-tiktok'
 // import { google } from 'whitebox-adnetworks-google'   // server GA4 — see note below
@@ -71,7 +72,7 @@ export default async (runtime) => ({
   // MCP endpoint + auth. `auth` is a pluggable verifier: a static Bearer secret
   // by default (string or { secret }), or a composed one from an external
   // package. For Auth0, add at the top:
-  //   import { auth0 } from 'whitebox-server-auth-auth0'
+  //   import { auth0 } from 'whitebox-auth-auth0'
   // and set: auth: auth0({ domain: process.env.AUTH0_DOMAIN,
   //                        audience: 'https://whitebox/mcp', scope: 'mcp:use' })
   // (that also serves /.well-known/oauth-protected-resource so MCP clients can

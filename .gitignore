@@ -20,13 +20,6 @@ dist/
 *.key
 .npmrc
 
-# ── External integrations — each lives in its own repo ────────
-# Ad-network packages (meta/google/tiktok) and auth providers (auth0) are
-# developed + released independently. Clone them into ./integrations and the
-# `integrations/*` workspace glob links them locally; the monorepo tracks none
-# of their source.
-integrations/
-
 # ── Legacy (kept on disk for reference, never in this repo) ────
 whitebox-v1/
 
@@ -37,3 +30,6 @@ coverage/
 .vitest/
 .idea/
 .vscode/
+# Multi-root workspace is personal dev config — it may list private
+# integration roots (under the gitignored integrations/), so keep it local.
+*.code-workspace
