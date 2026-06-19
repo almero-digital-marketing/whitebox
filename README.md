@@ -44,15 +44,16 @@ This is a monorepo (npm workspaces) — each package publishes independently.
 
 ## Integrations
 
-Third-party adapters live in **their own repos**, not this monorepo. Each is a self-contained package that composes into config like a plugin — ad networks (Meta/Google/TikTok Conversions APIs + pixels), mail providers (Mailgun/Postmark), and MCP auth providers (Auth0 and other OAuth resource-server verifiers):
+Third-party adapters live in **their own repos**, not this monorepo. Each is a self-contained package that composes into config like a plugin — ad networks (Meta/Google/TikTok Conversions APIs + pixels), mail providers (Mailgun/Postmark), SMS providers (Twilio/Mobica), and MCP auth providers (Auth0 and other OAuth resource-server verifiers):
 
 | package | composes into | what it does |
 |---|---|---|
 | `whitebox-adnetworks-meta` · `-google` · `-tiktok` | `conversions({ networks: […] })` | server CAPI fan-out (`.`) + browser pixel (`/client`), deduped by `event_id` |
 | `whitebox-mail-mailgun` · `whitebox-mail-postmark` | `mail({ provider: … })` | send + transport, inbound/tracking webhook parsing, webhook signature verification |
+| `whitebox-sms-twilio` · `whitebox-sms-mobica` | `sms({ provider: …, routes: {…} })` | send + DLR/inbound webhook parsing, signature verification; routed per destination prefix |
 | `whitebox-auth-auth0` | `mcp: { auth: auth0({…}) }` | JWT/OAuth verifier for the `/mcp` endpoint + RFC 9728 discovery |
 
-The shared kernel [`whitebox-adnetworks`](whitebox-adnetworks) (zod schemas, canonical events, identity helpers), the mail plugin's provider seam, and the pluggable MCP auth seam in [`whitebox-server`](whitebox-server) stay in-tree; only the provider specifics live outside.
+The shared kernel [`whitebox-adnetworks`](whitebox-adnetworks) (zod schemas, canonical events, identity helpers), the mail and SMS plugins' provider seams, and the pluggable MCP auth seam in [`whitebox-server`](whitebox-server) stay in-tree; only the provider specifics live outside.
 
 Integrations live in a **sibling directory outside the monorepo** (default `../whitebox-integrations/`, override with `WB_INTEGRATIONS_DIR`) so they're never part of the monorepo's working tree or git. Clone the ones you need there, then link them in:
 

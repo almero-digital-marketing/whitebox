@@ -18,15 +18,18 @@ import { conversions } from 'whitebox-server-plugin-conversions'
 import { shortener } from 'whitebox-server-plugin-shortener'
 import { voip } from 'whitebox-server-plugin-voip'
 import { mail } from 'whitebox-server-plugin-mail'
+import { sms } from 'whitebox-server-plugin-sms'
 
-// Ad networks and the mail provider compose like plugins — one self-contained,
-// independently-released package each, living in their own repos outside this
-// monorepo (see ../whitebox-integrations + `npm run link:integrations`).
+// Ad networks, mail providers, and SMS providers compose like plugins — one
+// self-contained, independently-released package each, living in their own repos
+// outside this monorepo (see ../whitebox-integrations + `npm run link:integrations`).
 import { meta } from 'whitebox-adnetworks-meta'
 import { tiktok } from 'whitebox-adnetworks-tiktok'
 // import { google } from 'whitebox-adnetworks-google'   // server GA4 — see note below
 import { mailgun } from 'whitebox-mail-mailgun'
 // import { postmark } from 'whitebox-mail-postmark'      // swap the mail provider below
+import { twilio } from 'whitebox-sms-twilio'
+import { mobica } from 'whitebox-sms-mobica'
 
 export default async (runtime) => ({
   port: Number(process.env.WB_PORT || 3000),
@@ -169,6 +172,29 @@ export default async (runtime) => ({
         attempts: 5,                                 // total send attempts before terminal failure
         backoffMs: 5000,                             // initial exponential backoff
       },
+    }),
+
+    // SMS, with a provider chosen by destination: Twilio by default, Mobica for
+    // Bulgarian (+359) numbers. Providers own send + webhook auth + payload
+    // parsing; the plugin owns outbox/status/suppressions/awareness. Mobica is
+    // a send + DLR gateway (no inbound); Twilio does send + inbound + status.
+    sms({
+      provider: twilio({
+        accountSid: process.env.WB_TWILIO_SID,
+        authToken: process.env.WB_TWILIO_TOKEN,
+        from: process.env.WB_TWILIO_FROM,                                  // a Twilio number or messagingServiceSid
+        statusCallback: 'https://wb.example.com/sms/webhooks/twilio/status',
+      }),
+      routes: {
+        '+359': mobica({
+          user: process.env.WB_MOBICA_USER,
+          pass: process.env.WB_MOBICA_PASS,
+          from: 'WhiteBox',                                                // alphanumeric sender id
+          // dlrSecret: process.env.WB_MOBICA_DLR_SECRET,                  // ?secret= on the DLR URL
+        }),
+      },
+      defaultCountry: 'BG',                                                // for normalizing national numbers
+      auth: { secret: process.env.WB_SMS_TOKEN },                         // Bearer for /sms/outbox + /sms/bulk
     }),
   ].filter(Boolean),
 })
