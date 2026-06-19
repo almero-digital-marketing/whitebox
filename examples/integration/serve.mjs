@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Dev server for the WhiteBox engagement demo.
 //
-//   • starts the whitebox-server as a child process (unless one is already
+//   • starts the whitebox-pro-server as a child process (unless one is already
 //     running on the target port, or WB_SERVER points at a remote host, or
 //     WB_START_SERVER=0)
 //   • serves the static demo page (index.html)
-//   • bundles main.js — the real whitebox-client + engagement plugin — with
+//   • bundles main.js — the real whitebox-pro-client + engagement plugin — with
 //     esbuild on the fly (no CDN, works offline)
 //   • reverse-proxies API + WebSocket traffic to the server so the browser
 //     talks to it SAME-ORIGIN (the server has no HTTP CORS)
@@ -26,11 +26,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 5273)
 const TARGET = new URL(process.env.WB_SERVER || 'http://localhost:3000')
 const TARGET_PORT = Number(TARGET.port || (TARGET.protocol === 'https:' ? 443 : 80))
-const SERVER_DIR = path.resolve(__dirname, '../../whitebox-server')
+const SERVER_DIR = path.resolve(__dirname, '../../whitebox-pro-server')
 const TARGET_IS_LOCAL = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(TARGET.hostname)
 const START_SERVER = process.env.WB_START_SERVER !== '0' && TARGET_IS_LOCAL
 
-// Load whitebox-server/.env into our env too, so we can inject the SAME ad-pixel
+// Load whitebox-pro-server/.env into our env too, so we can inject the SAME ad-pixel
 // ids the server uses (WB_META_PIXEL_ID / WB_GA4_MEASUREMENT_ID /
 // WB_TIKTOK_PIXEL_CODE). Best-effort — needs Node ≥20.6 and the file present.
 try { process.loadEnvFile?.(path.join(SERVER_DIR, '.env')) } catch {}
@@ -63,7 +63,7 @@ const API_PREFIXES = [
 ]
 const isApi = (url) => API_PREFIXES.some(p => url === p || url.startsWith(p + '/') || url.startsWith(p + '?'))
 
-// ── whitebox-server child process ─────────────────────────────────────────
+// ── whitebox-pro-server child process ─────────────────────────────────────────
 let child = null
 
 function portOpen(port, host = '127.0.0.1') {
@@ -77,7 +77,7 @@ function portOpen(port, host = '127.0.0.1') {
 }
 
 function startServer() {
-  console.log(`[demo] starting whitebox-server (${SERVER_DIR}) …`)
+  console.log(`[demo] starting whitebox-pro-server (${SERVER_DIR}) …`)
   // Forward our CLI flags (e.g. --reset --seed) to the server, so
   // `node serve.mjs --reset --seed` wipes + seeds while bringing up the demo.
   child = spawn('node', ['--env-file-if-exists=.env', 'src/server.js', ...process.argv.slice(2)], {
@@ -94,7 +94,7 @@ function startServer() {
     })
   }
   pipe(child.stdout); pipe(child.stderr)
-  child.on('exit', (code) => { console.log(`[demo] whitebox-server exited (code ${code})`); child = null })
+  child.on('exit', (code) => { console.log(`[demo] whitebox-pro-server exited (code ${code})`); child = null })
 }
 
 function shutdown() {
@@ -123,7 +123,7 @@ function proxyHttp(req, res) {
   upstream.on('error', err => {
     if (res.headersSent) return res.end()
     res.writeHead(504, { 'content-type': 'text/plain' })
-    res.end(`proxy: ${err.message} — is whitebox-server up at ${TARGET.href}?`)
+    res.end(`proxy: ${err.message} — is whitebox-pro-server up at ${TARGET.href}?`)
   })
   req.on('error', () => upstream.destroy())
   req.pipe(upstream)
@@ -170,7 +170,7 @@ server.listen(PORT, async () => {
   console.log(`WhiteBox SaaS integration demo [auto-start server] → http://localhost:${PORT}`)
   console.log(`proxying API + WS → ${TARGET.href}`)
   console.log(PIXELS.on.length
-    ? `[demo] injecting ad pixels: ${PIXELS.on.join(', ')} (set WB_*_PIXEL_* in whitebox-server/.env)`
+    ? `[demo] injecting ad pixels: ${PIXELS.on.join(', ')} (set WB_*_PIXEL_* in whitebox-pro-server/.env)`
     : '[demo] no ad pixels configured — conversions record server-side only (set WB_META_PIXEL_ID / WB_GA4_MEASUREMENT_ID / WB_TIKTOK_PIXEL_CODE to load them)')
 
   if (!START_SERVER) {
@@ -180,13 +180,13 @@ server.listen(PORT, async () => {
     return
   }
   if (await portOpen(TARGET_PORT)) {
-    console.log(`[demo] whitebox-server already running on :${TARGET_PORT} — reusing it`)
+    console.log(`[demo] whitebox-pro-server already running on :${TARGET_PORT} — reusing it`)
     return
   }
   startServer()
   for (let i = 0; i < 40; i++) {
     await new Promise(r => setTimeout(r, 1000))
-    if (await portOpen(TARGET_PORT)) { console.log(`[demo] whitebox-server ready on :${TARGET_PORT} — open http://localhost:${PORT}`); break }
-    if (!child) { console.log('[demo] whitebox-server failed to start — see [server] logs above'); break }
+    if (await portOpen(TARGET_PORT)) { console.log(`[demo] whitebox-pro-server ready on :${TARGET_PORT} — open http://localhost:${PORT}`); break }
+    if (!child) { console.log('[demo] whitebox-pro-server failed to start — see [server] logs above'); break }
   }
 })

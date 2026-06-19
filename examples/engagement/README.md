@@ -1,22 +1,22 @@
 # Engagement demo — client → server, end to end
 
-A static page that loads the **real** `whitebox-client` + `whitebox-client-plugin-engagement`,
-tracks reading / image dwell / video watching, and streams it to a running whitebox-server.
+A static page that loads the **real** `whitebox-pro-client` + `whitebox-pro-client-plugin-engagement`,
+tracks reading / image dwell / video watching, and streams it to a running whitebox-pro-server.
 Use it to exercise the whole path: browser tracker → socket → engagement plugin → awareness.
 
 ```
 browser (this page)
-   │  whitebox-client + engagement plugin
+   │  whitebox-pro-client + engagement plugin
    ▼
 serve.mjs  ── static page + esbuild bundle ──┐   same-origin, no CORS
    │  reverse-proxy /sessions /socket.io …    │
    ▼                                          │
-whitebox-server (engagement + analytics) ◀────┘
+whitebox-pro-server (engagement + analytics) ◀────┘
    ▼
 awareness store  → channel: web · direction: exposure
 ```
 
-`serve.mjs` does three things: **starts the whitebox-server** (a child process it manages),
+`serve.mjs` does three things: **starts the whitebox-pro-server** (a child process it manages),
 **serves the demo page** (bundling it with esbuild), and **reverse-proxies** API + WebSocket
 traffic to the server. The proxy is what makes it work without touching the server: the server has
 **no HTTP CORS**, so the browser must reach it same-origin — and through the proxy, it does.
@@ -26,9 +26,9 @@ traffic to the server. The proxy is what makes it work without touching the serv
 1. **Install + build once** (from the repo root):
    ```bash
    npm install
-   npm run build --workspace=whitebox-client     # produces whitebox-client/dist
+   npm run build --workspace=whitebox-pro-client     # produces whitebox-pro-client/dist
    ```
-2. **Redis running locally** and `whitebox-server/.env` filled in (copy from `.env.example`) with
+2. **Redis running locally** and `whitebox-pro-server/.env` filled in (copy from `.env.example`) with
    DB, OpenAI key, and `WB_ENGAGEMENT_TOKEN` / `WB_ANALYTICS_TOKEN`. `whitebox.config.js` must have
    `engagement` + `analytics` in `plugins`.
 
@@ -40,7 +40,7 @@ node serve.mjs
 # → http://localhost:5173
 ```
 
-`serve.mjs` **starts the whitebox-server for you** (streaming its logs prefixed `[server]`), waits
+`serve.mjs` **starts the whitebox-pro-server for you** (streaming its logs prefixed `[server]`), waits
 for it, then serves the demo. Stopping `serve.mjs` (Ctrl+C) shuts the server down too. Variants:
 
 ```bash
@@ -83,6 +83,6 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/
   first view — that calls OpenAI. To skip it, pass `video: false` to `engagementPlugin({...})` in
   `main.js`.
 - **No build step for the demo itself** — `serve.mjs` bundles `main.js` from the workspace packages
-  with esbuild on each load. You do need `whitebox-client/dist` built (step 1) because the plugin
+  with esbuild on each load. You do need `whitebox-pro-client/dist` built (step 1) because the plugin
   imports the client's built subpath exports.
 - Tune responsiveness in `main.js`: `flushIntervalMs` / `batchSize` on the plugin options.

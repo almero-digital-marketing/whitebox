@@ -7,10 +7,10 @@ What it exercises today:
 | surface | in the demo |
 |---|---|
 | **core** | session/passport resolution, socket transport, `consent` | header pills + the consent banner |
-| **`whitebox-client-plugin-engagement`** | reading / image-dwell tracking + **link-click intent** | the service copy (pricing/insurance, cosmetic/whitening, orthodontics/Invisalign, implants/restorative) and the *Learn more* CTAs (`data-wb-link`) |
-| **`whitebox-client-plugin-crm`** | client observations of patient-portal actions | the "Simulate patient actions" buttons (registration, appointment, insurance, whitening, treatment plans, payment plans, emergency, referral, accept treatment) |
-| **`whitebox-client-plugin-voip`** | per-visitor call-tracking number (DNI) | the "Call the clinic" card + callback form |
-| **`whitebox-client-plugin-conversions`** | standard conversion events → ad-network pixels (Meta/TikTok/GA4) **+** server SST, deduped by `event_id` | the "Fire standard events" card |
+| **`whitebox-pro-client-plugin-engagement`** | reading / image-dwell tracking + **link-click intent** | the service copy (pricing/insurance, cosmetic/whitening, orthodontics/Invisalign, implants/restorative) and the *Learn more* CTAs (`data-wb-link`) |
+| **`whitebox-pro-client-plugin-crm`** | client observations of patient-portal actions | the "Simulate patient actions" buttons (registration, appointment, insurance, whitening, treatment plans, payment plans, emergency, referral, accept treatment) |
+| **`whitebox-pro-client-plugin-voip`** | per-visitor call-tracking number (DNI) | the "Call the clinic" card + callback form |
+| **`whitebox-pro-client-plugin-conversions`** | standard conversion events → ad-network pixels (Meta/TikTok/GA4) **+** server SST, deduped by `event_id` | the "Fire standard events" card |
 
 One passport, one timeline — website reads and patient-portal actions land in the **same per-patient memory**.
 
@@ -19,16 +19,16 @@ One passport, one timeline — website reads and patient-portal actions land in 
 1. Build the client once (from the repo root):
    ```bash
    npm install
-   npm run build --workspace=whitebox-client
+   npm run build --workspace=whitebox-pro-client
    ```
-2. **Redis running** and `whitebox-server/.env` filled in (copy `.env.example`).
-3. The server config (`whitebox-server/whitebox.config.js`) must load the plugins this demo uses. Plugins are factories called with their options (`crm` needs an auth token or it won't register):
+2. **Redis running** and `whitebox-pro-server/.env` filled in (copy `.env.example`).
+3. The server config (`whitebox-pro-server/whitebox.config.js`) must load the plugins this demo uses. Plugins are factories called with their options (`crm` needs an auth token or it won't register):
    ```js
-   import { engagement } from 'whitebox-server-plugin-engagement'
-   import { crm } from 'whitebox-server-plugin-crm'
-   import { analytics } from 'whitebox-server-plugin-analytics'
-   import { voip } from 'whitebox-server-plugin-voip'
-   import { conversions } from 'whitebox-server-plugin-conversions'
+   import { engagement } from 'whitebox-pro-server-plugin-engagement'
+   import { crm } from 'whitebox-pro-server-plugin-crm'
+   import { analytics } from 'whitebox-pro-server-plugin-analytics'
+   import { voip } from 'whitebox-pro-server-plugin-voip'
+   import { conversions } from 'whitebox-pro-server-plugin-conversions'
    // …
    plugins: [
      engagement({ auth: { secret: process.env.WB_ENGAGEMENT_TOKEN } }),
@@ -44,7 +44,7 @@ One passport, one timeline — website reads and patient-portal actions land in 
 
 ```bash
 cd examples/integration
-node serve.mjs            # starts whitebox-server too, then serves on :5273
+node serve.mjs            # starts whitebox-pro-server too, then serves on :5273
 ```
 
 `serve.mjs` starts the server for you (logs prefixed `[server]`), bundles `main.js` with esbuild, and proxies API + WebSocket same-origin. Open the URL it prints.
@@ -65,7 +65,7 @@ The **Fire standard events** card sends each conversion two ways under one share
 - **Browser pixels** — `serve.mjs` injects the Meta / GA4 / TikTok base snippets into the page **when their ids are set** (below); the conversions client fires `Purchase`/`ViewContent`/… on whatever's loaded.
 - **Server-side (SST)** — the same event POSTs to `/conversions/events`; the server `conversions` plugin records it into awareness and, for each **configured** network, fans out (Meta CAPI / TikTok Events API).
 
-Both read the **same env vars** — set them in `whitebox-server/.env` (the demo and the server both load it):
+Both read the **same env vars** — set them in `whitebox-pro-server/.env` (the demo and the server both load it):
 
 | env var | network | used by | what it is |
 |---|---|---|---|
@@ -79,11 +79,11 @@ Both read the **same env vars** — set them in `whitebox-server/.env` (the demo
 
 > **GA4 is client-side only** here: GA4 has no pixel↔Measurement-Protocol `event_id` dedup, so we fire `gtag` in the browser and **don't** enable the server `google` adapter (it would double-count non-purchase events). Meta and TikTok fire both legs, deduped.
 
-Then make the server fan out: your `whitebox-server/whitebox.config.js` must include `conversions` with a `networks` block (the committed `whitebox.config.example.js` already has it):
+Then make the server fan out: your `whitebox-pro-server/whitebox.config.js` must include `conversions` with a `networks` block (the committed `whitebox.config.example.js` already has it):
 
 ```js
-import { meta } from 'whitebox-adnetworks-meta'
-import { tiktok } from 'whitebox-adnetworks-tiktok'
+import { meta } from 'whitebox-pro-adnetworks-meta'
+import { tiktok } from 'whitebox-pro-adnetworks-tiktok'
 
 conversions({
   auth: { secret: process.env.WB_CONVERSIONS_TOKEN },
@@ -111,10 +111,10 @@ node serve.mjs --reset --seed    # bring up the demo, wipe, then seed ~30 patien
 COUNT=60 node serve.mjs --reset --seed
 ```
 
-`serve.mjs` forwards the flags to the whitebox-server it starts. **`--reset`** wipes all awareness data on boot; **`--seed`** runs the seed once the server is listening (it spawns `seed.mjs` against itself). Use either alone — `--seed` to add to the current base, `--reset` to clear without reseeding. You can also drive the server directly:
+`serve.mjs` forwards the flags to the whitebox-pro-server it starts. **`--reset`** wipes all awareness data on boot; **`--seed`** runs the seed once the server is listening (it spawns `seed.mjs` against itself). Use either alone — `--seed` to add to the current base, `--reset` to clear without reseeding. You can also drive the server directly:
 
 ```bash
-cd whitebox-server
+cd whitebox-pro-server
 node --env-file=.env src/server.js --reset --seed
 ```
 
@@ -126,7 +126,7 @@ node examples/integration/seed.mjs      # ~30 patients   (COUNT=60 for more)
 
 Give embeddings a few seconds, then open the console's **All customers** tab and ask *"What treatments are patients most interested in?"* or run a cohort on *"teeth whitening"* / *"dental implants"*. The personas read the service copy (whitening, Invisalign, implants, pricing/insurance) and fire matching CRM observations, so cohorts and themes are real.
 
-> **`--reset` is destructive** — it clears *all* awareness content (every passport's reads / observations / calls) on whatever DB `whitebox-server/.env` points at. Demo/dev databases only.
+> **`--reset` is destructive** — it clears *all* awareness content (every passport's reads / observations / calls) on whatever DB `whitebox-pro-server/.env` points at. Demo/dev databases only.
 
 ## Verify on the server
 

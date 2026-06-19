@@ -1,0 +1,25 @@
+{
+  "name": "whitebox-pro-server-plugin-sms",
+  "version": "0.1.0",
+  "description": "SMS channel for whitebox — outbound (transactional + bulk), inbound replies with STOP/START opt-out, delivery-status (DLR) tracking, suppressions, invalid list. Pluggable provider (whitebox-pro-sms-twilio, whitebox-pro-sms-mobica, …) routed by destination country.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "whitebox-pro-server": "^2.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "libphonenumber-js": "^1.11.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ]
+}

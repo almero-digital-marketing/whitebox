@@ -6,10 +6,10 @@ Ask grounded questions — about **one customer** or your **whole customer base*
 
 ```bash
 cd examples/console
-node serve.mjs            # starts/reuses whitebox-server, serves on :5373
+node serve.mjs            # starts/reuses whitebox-pro-server, serves on :5373
 ```
 
-`serve.mjs` reuses a running whitebox-server (or starts one), proxies `/analytics/*` same-origin, and hands the page the analytics token from `whitebox-server/.env` so you don't have to paste it (local-only; the field stays editable).
+`serve.mjs` reuses a running whitebox-pro-server (or starts one), proxies `/analytics/*` same-origin, and hands the page the analytics token from `whitebox-pro-server/.env` so you don't have to paste it (local-only; the field stays editable).
 
 ## Two tabs
 
