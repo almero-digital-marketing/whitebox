@@ -1,0 +1,29 @@
+{
+  "name": "whitebox-pro-server-plugin-conversions",
+  "version": "0.1.0",
+  "description": "WhiteBox server plugin — receives standard/custom conversion events from the browser (POST /conversions/events), records them into awareness, and fans out to the ad networks (Meta CAPI / GA4 MP / TikTok Events API) via whitebox-pro-adnetworks, deduped against the browser pixels by event_id.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "whitebox-pro-adnetworks": "^0.1.0",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "whitebox-pro-server": "^2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}

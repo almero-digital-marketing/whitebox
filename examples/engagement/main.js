@@ -3,8 +3,8 @@
 // "Failed to resolve module specifier" error, you're not serving via
 // `node serve.mjs` — open the URL it prints instead.
 
-import whitebox from 'whitebox-client'
-import engagementPlugin from 'whitebox-client-plugin-engagement'
+import whitebox from 'whitebox-pro-client'
+import engagementPlugin from 'whitebox-pro-client-plugin-engagement'
 
 const logEl = document.querySelector('#log')
 const statusEl = document.querySelector('#status')
@@ -177,7 +177,7 @@ try {
   setStatus('session ready', true)
   passportEl.textContent = wb.passportId || '(none — is the server up?)'
   log('ready', `passport ${wb.passportId}`)
-  if (!wb.passportId) log('warn', 'No passport — /sessions/resolve returned none. Is whitebox-server up at WB_SERVER?')
+  if (!wb.passportId) log('warn', 'No passport — /sessions/resolve returned none. Is whitebox-pro-server up at WB_SERVER?')
 } catch (err) {
   setStatus('error'); log('error', `init failed: ${err?.message || err}`); throw err
 }

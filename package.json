@@ -1,19 +1,19 @@
 {
-  "name": "whitebox-monorepo",
+  "name": "whitebox-pro-monorepo",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "description": "Whitebox monorepo — server core, browser client, and channel plugins. Each workspace publishes as its own npm package.",
   "workspaces": [
-    "whitebox-server",
-    "whitebox-client",
-    "whitebox-adnetworks",
-    "whitebox-server-plugin-*",
-    "whitebox-client-plugin-*"
+    "whitebox-pro-server",
+    "whitebox-pro-client",
+    "whitebox-pro-adnetworks",
+    "whitebox-pro-server-plugin-*",
+    "whitebox-pro-client-plugin-*"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",
-    "test:server": "npm test --workspace=whitebox-server",
+    "test:server": "npm test --workspace=whitebox-pro-server",
     "link:integrations": "bash scripts/link-integrations.sh",
     "postinstall": "bash scripts/link-integrations.sh"
   },

@@ -11,7 +11,7 @@
 // Everything funnels into the one awareness store and is embedded by the
 // RUNNING server, so semantic recall/population actually matches.
 //
-//   Run (with the demo or whitebox-server up on :3000):
+//   Run (with the demo or whitebox-pro-server up on :3000):
 //     node examples/integration/seed.mjs              # ~30 customers
 //     COUNT=60 node examples/integration/seed.mjs
 //     WB_SERVER=http://localhost:3000 node examples/integration/seed.mjs
@@ -154,7 +154,7 @@ async function main() {
     const h = await fetch(`${SERVER}/health`).catch(() => null)
     if (!h || !h.ok) throw new Error('no /health')
   } catch {
-    console.error(`Cannot reach whitebox-server at ${SERVER}. Start the demo (node serve.mjs) or set WB_SERVER.`)
+    console.error(`Cannot reach whitebox-pro-server at ${SERVER}. Start the demo (node serve.mjs) or set WB_SERVER.`)
     process.exit(1)
   }
 

@@ -10,14 +10,14 @@
 // plugin here when one ships — wire it into `plugins`, surface it in the UI, and
 // log its events in one place below.
 
-import whitebox from 'whitebox-client'
-import engagementPlugin from 'whitebox-client-plugin-engagement'
-import crmPlugin from 'whitebox-client-plugin-crm'
-import voipPlugin from 'whitebox-client-plugin-voip'
-import conversionsPlugin from 'whitebox-client-plugin-conversions'
-import { meta } from 'whitebox-adnetworks-meta/client'
-import { google } from 'whitebox-adnetworks-google/client'
-import { tiktok } from 'whitebox-adnetworks-tiktok/client'
+import whitebox from 'whitebox-pro-client'
+import engagementPlugin from 'whitebox-pro-client-plugin-engagement'
+import crmPlugin from 'whitebox-pro-client-plugin-crm'
+import voipPlugin from 'whitebox-pro-client-plugin-voip'
+import conversionsPlugin from 'whitebox-pro-client-plugin-conversions'
+import { meta } from 'whitebox-pro-adnetworks-meta/client'
+import { google } from 'whitebox-pro-adnetworks-google/client'
+import { tiktok } from 'whitebox-pro-adnetworks-tiktok/client'
 
 const logEl = document.querySelector('#log')
 const statusEl = document.querySelector('#status')

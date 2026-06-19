@@ -1,0 +1,27 @@
+{
+  "name": "whitebox-pro-server-plugin-shortener",
+  "version": "0.1.0",
+  "description": "WhiteBox server plugin — branded short links on their own host that hide a passport behind an opaque code. A personalized link, when clicked, hard-binds the visitor's session to that customer (stitching anonymous history via the core passport merge). Public redirect + Bearer management + single-use claim.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "peerDependencies": {
+    "whitebox-pro-server": "^2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}

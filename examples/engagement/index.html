@@ -185,7 +185,7 @@
   })
   addEventListener('unhandledrejection', function (e) { fail((e.reason && e.reason.message) || String(e.reason)) })
   setTimeout(function () {
-    if (!window.__wbReady) row('warn', 'Still not ready after 6s. Check: (1) running via `node serve.mjs`? (2) whitebox-server up at WB_SERVER? Open the browser console for details.')
+    if (!window.__wbReady) row('warn', 'Still not ready after 6s. Check: (1) running via `node serve.mjs`? (2) whitebox-pro-server up at WB_SERVER? Open the browser console for details.')
   }, 6000)
 })()
 </script>
