@@ -39,8 +39,14 @@ function mailConfig(overrides = {}) {
   return {
     attachmentsFolder: '/tmp/wb-mail-test',
     company: 'info@test',
-    mailgun: { apiKey: 'k', domain: 'mail.test', webhookSigningKey: 's' },
-    webhookReplayWindowMs: 60_000,
+    // A composed mail provider — only the contract shape matters here.
+    provider: {
+      name: 'stub',
+      send: vi.fn(async () => ({ messageId: 'x' })),
+      verifySignature: vi.fn(() => true),
+      parseInbound: vi.fn(() => ({})),
+      parseTracking: vi.fn(() => null),
+    },
     webhooks: [],
     auth: { secret: 's' },
     outbox: { stuckCheckIntervalMs: 0 },                                  // disable reaper timer

@@ -49,7 +49,7 @@ export function registerMcp(ctx, { db }) {
 
   ctx.mcp.tool({
     name: 'mail.outbox_get',
-    description: 'Fetch a single outbox row by id: status, recipient, subject, timestamps, Mailgun id.',
+    description: 'Fetch a single outbox row by id: status, recipient, subject, timestamps, provider message id.',
     inputSchema: { id: z.number().int().positive() },
     handler: async ({ id }) => {
       const row = await db('whitebox_mail_outbox').where({ id }).first()
@@ -62,7 +62,7 @@ export function registerMcp(ctx, { db }) {
 
   ctx.mcp.tool({
     name: 'mail.inbox_list',
-    description: 'List inbound messages (contact-form submissions and Mailgun replies) most-recent-first. Filter by passport, source, or date range.',
+    description: 'List inbound messages (contact-form submissions and email replies) most-recent-first. Filter by passport, source, or date range.',
     inputSchema: {
       passport_id: z.string().uuid().optional(),
       source:      z.enum(['form', 'inbound']).optional(),

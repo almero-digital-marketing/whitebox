@@ -54,7 +54,7 @@ export async function checkMany(emails) {
   return new Set(rows.map(r => r.email))
 }
 
-export async function add({ email, reason = 'rejected', source = 'mailgun', errorMessage = null }) {
+export async function add({ email, reason = 'rejected', source = 'provider', errorMessage = null }) {
   const e = normalize(email)
   if (!e) return null
   if (!REASONS.includes(reason)) reason = 'rejected'

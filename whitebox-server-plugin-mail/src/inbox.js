@@ -2,7 +2,6 @@ import { z } from 'zod'
 import multer from 'multer'
 import { parsePhoneNumber } from 'libphonenumber-js'
 import * as mailer from './mailer.js'
-import * as signature from './signature.js'
 import * as attachments from './attachments.js'
 
 const INBOX = 'whitebox_mail_inbox'
@@ -65,9 +64,10 @@ export function extractIdentities({ from, phone, name, address, data, country })
   return out
 }
 
-// Mailgun inbound webhooks arrive as multipart/form-data.
-// Attachments land as files; all other fields (including signature
-// fields timestamp/token/signature) arrive as flat body fields.
+// Inbound webhooks may arrive as multipart/form-data (e.g. Mailgun, with
+// attachments as files) or JSON (e.g. Postmark). multer parses the former and
+// no-ops on the latter (the core JSON body parser handles it); the composed
+// provider's parseInbound() reads whichever shape applies.
 export const upload = multer({ storage: multer.memoryStorage() })
 
 const UTM_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']
@@ -103,12 +103,13 @@ let sessions
 let awareness
 let notify
 let logger
+let provider
 
 // Module state set up in init()
 let forwardQueue
 
 export function init(deps) {
-  ;({ config, db, passports, sessions, awareness, notify, logger } = deps)
+  ;({ config, db, passports, sessions, awareness, notify, logger, provider } = deps)
   const { q } = deps
   const mailConfig = config.mail
 
@@ -137,10 +138,10 @@ export function init(deps) {
 }
 
 function resolveRecipient(to) {
-  const mailConfig = config.mail
-  const domain = mailConfig.mailgun.domain
-  if (to && to.endsWith(`@${domain}`)) return to
-  return mailConfig.company
+  // Keep an explicit `to` only when the provider recognizes it as one of our
+  // own inbound addresses; otherwise route to the company catch-all.
+  if (to && provider.ownsAddress?.(to)) return to
+  return config.mail.company
 }
 
 export async function inboxMail(req, res) {
@@ -216,26 +217,25 @@ export async function inboxMail(req, res) {
 }
 
 export async function handle(req, res) {
-  // Inbound signature fields are flat in the multipart body
-  const sig = {
-    timestamp: req.body?.timestamp,
-    token: req.body?.token,
-    signature: req.body?.signature,
-  }
-  if (!signature.verify(sig, 'Inbound')) {
+  // The provider owns webhook authenticity (Mailgun HMAC, Postmark basic-auth, …).
+  if (!provider.verifySignature(req, 'inbound')) {
     return res.status(401).end()
   }
 
-  const from = req.body.sender || req.body.from
-  const to = req.body.recipient || config.mail.company
-  const subject = req.body.subject
-  const body = req.body['stripped-text'] || req.body['body-plain'] || null
-  const bodyHtml = req.body['body-html'] || null
+  // …and the provider-specific payload shape. It returns a normalized message
+  // plus already-extracted attachment buffers (multipart files for Mailgun,
+  // base64 parts for Postmark) so the storage path below stays uniform.
+  const parsed = provider.parseInbound(req) || {}
+  const from = parsed.from
+  const to = parsed.to || config.mail.company
+  const subject = parsed.subject
+  const body = parsed.body || null
+  const bodyHtml = parsed.bodyHtml || null
 
-  // Save any attached files to disk with UUID names
+  // Save any attachments to disk with UUID names
   const savedAttachments = await Promise.all(
-    (req.files || []).map(f => attachments.saveBuffer(f.buffer, f.originalname).catch(err => {
-      logger.warn({ err }, 'Failed to save inbound attachment: %s', f.originalname)
+    (parsed.attachments || []).map(a => attachments.saveBuffer(a.content, a.filename).catch(err => {
+      logger.warn({ err }, 'Failed to save inbound attachment: %s', a.filename)
       return null
     }))
   ).then(results => results.filter(Boolean))

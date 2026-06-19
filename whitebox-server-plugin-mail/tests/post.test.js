@@ -21,7 +21,7 @@ function makeDb({ insertResult, throwOnInsert } = {}) {
 function makeOutbox({ db, outboxQueue, notify, sessions } = {}) {
   const queue = outboxQueue ?? { add: vi.fn(async () => {}) }
   outbox.init({
-    config: { mail: { mailgun: { domain: DOMAIN }, outbox: {} } },
+    config: { mail: { outbox: {} } },
     db: db ?? makeDb(),
     q: {
       createQueue: vi.fn(() => queue),

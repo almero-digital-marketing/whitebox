@@ -19,10 +19,13 @@ import { shortener } from 'whitebox-server-plugin-shortener'
 import { voip } from 'whitebox-server-plugin-voip'
 import { mail } from 'whitebox-server-plugin-mail'
 
-// Ad networks compose like plugins — one self-contained package each.
+// Ad networks and the mail provider compose like plugins — one self-contained,
+// independently-released package each (kept under ./integrations for local dev).
 import { meta } from 'whitebox-adnetworks-meta'
 import { tiktok } from 'whitebox-adnetworks-tiktok'
 // import { google } from 'whitebox-adnetworks-google'   // server GA4 — see note below
+import { mailgun } from 'whitebox-mail-mailgun'
+// import { postmark } from 'whitebox-mail-postmark'      // swap the mail provider below
 
 export default async (runtime) => ({
   port: Number(process.env.WB_PORT || 3000),
@@ -147,13 +150,19 @@ export default async (runtime) => ({
     // falsy value otherwise, and `.filter(Boolean)` drops it from the array.
     process.env.WB_MAILGUN_API_KEY && mail({
       company: 'team@example.com',   // forwarding destination for inbound + form submissions
-      mailgun: {
+      // The mail provider is composed like a plugin — Mailgun here. To use
+      // Postmark instead, import { postmark } above and swap:
+      //   provider: postmark({ serverToken: process.env.WB_POSTMARK_SERVER_TOKEN,
+      //     from: process.env.WB_POSTMARK_FROM,
+      //     webhookUser: process.env.WB_POSTMARK_WEBHOOK_USER,
+      //     webhookPassword: process.env.WB_POSTMARK_WEBHOOK_PASSWORD }),
+      provider: mailgun({
         apiKey: process.env.WB_MAILGUN_API_KEY,
         domain: process.env.WB_MAILGUN_DOMAIN || 'mg.example.com',
         webhookSigningKey: process.env.WB_MAILGUN_WEBHOOK_SIGNING_KEY,
-      },
+        replayWindowMs: 5 * 60 * 1000,               // reject webhook signatures older than this
+      }),
       auth: { secret: process.env.WB_MAIL_TOKEN },   // Bearer token for POST /mail/inbox and /mail/outbox
-      webhookReplayWindowMs: 5 * 60 * 1000,          // reject Mailgun signatures older than this
       outbox: {
         rate: { max: 10, duration: 60000 },          // worker rate limit (per duration)
         attempts: 5,                                 // total send attempts before terminal failure

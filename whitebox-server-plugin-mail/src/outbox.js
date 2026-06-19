@@ -62,13 +62,14 @@ let awareness
 let notify
 let config
 let logger
+let provider
 
 // Module state set up in init()
 let attempts
 export let outboxQueue
 
 export function init(deps) {
-  ;({ db, q, templates, passports, sessions, awareness, notify, config, logger } = deps)
+  ;({ db, q, templates, passports, sessions, awareness, notify, config, logger, provider } = deps)
 
   const mailConfig = config.mail
   attempts = mailConfig.outbox?.attempts ?? DEFAULT_ATTEMPTS
@@ -110,13 +111,13 @@ export function init(deps) {
     try {
       info = await mailer.send({ to: row.to, replyTo: row.from || null, subject: row.subject, html, text: row.text, attachments: row.attachments || [], track: true })
     } catch (err) {
-      const { permanent, statusCode, message } = invalid.classifyMailerError(err)
+      const { permanent, statusCode, message } = provider.classifyError?.(err) ?? invalid.classifyMailerError(err)
       if (permanent) {
         // Add to invalid list so we never try this address again
         await invalid.add({
           email: row.to,
           reason: 'rejected',
-          source: 'mailgun',
+          source: provider.name,
           errorMessage: `${statusCode ? `[${statusCode}] ` : ''}${message}`.slice(0, 512),
         }).catch(e => logger.error({ err: e }, 'Failed to record invalid recipient: %s', row.to))
         const failedRow = await failed(id, {
@@ -130,11 +131,11 @@ export function init(deps) {
       throw err // transient — let BullMQ retry
     }
 
-    const mailgunId = info?.messageId?.replace(/[<>]/g, '') || null
-    if (!mailgunId) {
-      logger.error({ outboxId: id }, 'Mailgun returned no messageId — tracking webhooks will not match')
+    const messageId = info?.messageId || null
+    if (!messageId) {
+      logger.error({ outboxId: id }, 'Provider returned no messageId — tracking webhooks will not match')
     }
-    const sentRow = await sent(id, mailgunId)
+    const sentRow = await sent(id, messageId)
 
     await notify('mail.sent', { type: 'mail.sent', data: sentRow })
 
@@ -153,7 +154,7 @@ export function init(deps) {
           to: sentRow.to,
           from: sentRow.from,
           template: sentRow.template,
-          mailgun_id: sentRow.mailgun_id,
+          provider_message_id: sentRow.provider_message_id,
         },
       }).catch(err => logger.warn({ err, outboxId: sentRow.id }, 'awareness.record failed'))
     }
@@ -288,9 +289,9 @@ export async function batchStats(batchId) {
   return { batch_id: batchId, totals }
 }
 
-export async function sent(id, mailgunId) {
+export async function sent(id, providerMessageId) {
   const [row] = await db(TABLE).where({ id }).update({
-    mailgun_id: mailgunId,
+    provider_message_id: providerMessageId,
     status: 'sent',
     sent_at: new Date(),
   }).returning('*')
@@ -339,7 +340,7 @@ export async function failed(id, { reason, attempts, terminal }) {
   return updated
 }
 
-export async function track(mailgunId, status) {
+export async function track(providerMessageId, status) {
   const targetRank = STATUS_RANK[status]
   if (targetRank == null) return null
 
@@ -348,7 +349,7 @@ export async function track(mailgunId, status) {
 
   const field = `${status}_at`
   const [updated] = await db(TABLE)
-    .where({ mailgun_id: mailgunId })
+    .where({ provider_message_id: providerMessageId })
     .whereIn('status', advanceableFrom)
     .update({ status, [field]: new Date() })
     .returning('*')

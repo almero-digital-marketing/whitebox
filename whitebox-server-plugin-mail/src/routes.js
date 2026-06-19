@@ -13,8 +13,8 @@ import * as bulk from './bulk.js'
 export function mountRoutes(app, { attachmentsFolder, requireAuth }) {
   const router = express.Router()
 
-  // Public — contact form intake. Mailgun inbound webhook is also public
-  // but signature-verified by `inbox.handle`.
+  // Public — contact form intake. The provider inbound/tracking webhooks are
+  // also public but authenticity-verified inside their handlers via the provider.
   router.post('/inbox',            inbox.upload.array('files'), inbox.inboxMail)
   router.post('/webhooks/inbox',   inbox.upload.any(), inbox.handle)
   router.post('/webhooks/tracking', tracking.handle)

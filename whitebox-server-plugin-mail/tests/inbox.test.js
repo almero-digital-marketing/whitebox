@@ -3,11 +3,11 @@ import * as inboxModule from '../src/inbox.js'
 import { extractIdentities } from '../src/inbox.js'
 import * as attachments from '../src/attachments.js'
 
-// inbox imports the mailer/signature/attachments singletons directly; mock
-// them so attachment saving stays assertable and the leaf mailer/signature
-// stubs stay inert for the inboxMail path under test.
+// inbox imports the mailer/attachments singletons directly; mock them so
+// attachment saving stays assertable and the leaf mailer stub stays inert for
+// the inboxMail path under test. Webhook auth + payload parsing now come from
+// the injected provider (see makeInbox).
 vi.mock('../src/mailer.js', () => ({ init: vi.fn(), send: vi.fn(async () => {}) }))
-vi.mock('../src/signature.js', () => ({ init: vi.fn(), verify: vi.fn(() => true) }))
 vi.mock('../src/attachments.js', () => ({
   init: vi.fn(),
   saveBuffer: vi.fn(async (buf, name) => `/mail/attachments/${name}`),
@@ -45,13 +45,17 @@ function makeInbox({ notify, sessions, passports, attachments: attachmentsOverri
   else attachments.saveBuffer.mockReset().mockImplementation(async (buf, name) => `/mail/attachments/${name}`)
 
   inboxModule.init({
-    config: { mail: { company: COMPANY, mailgun: { domain: DOMAIN } } },
+    config: { mail: { company: COMPANY } },
     db: makeDb(),
     q: { createQueue: vi.fn(() => forwardQueue), createWorker: vi.fn(() => {}) },
     passports: passports ?? { identify: vi.fn(async () => 'passport-1'), link: vi.fn(async () => {}) },
     sessions: sessions ?? { resolve: vi.fn(async () => ({ id: 1, passport_id: 'passport-1' })) },
     notify: notify ?? vi.fn(async () => {}),
     logger: { warn: vi.fn(), error: vi.fn() },
+    provider: {
+      name: 'mailgun',
+      ownsAddress: (a) => typeof a === 'string' && a.endsWith(`@${DOMAIN}`),
+    },
   })
   return {
     inboxMail: (...args) => inboxModule.inboxMail(...args),

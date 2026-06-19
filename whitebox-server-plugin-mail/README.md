@@ -4,7 +4,9 @@
 
 ## What it is
 
-The email **handshake** for whitebox: outbound sending (transactional + bulk), inbound capture (contact forms and Mailgun replies), tracking-webhook ingestion, and the two block lists every production sender needs (unsubscribed / hard-bounced).
+The email **handshake** for whitebox: outbound sending (transactional + bulk), inbound capture (contact forms and email replies), tracking-webhook ingestion, and the two block lists every production sender needs (unsubscribed / hard-bounced).
+
+The **email service provider is pluggable** — this plugin owns the outbox/queue/suppressions/awareness plumbing, and a composed provider package owns the transport, webhook authenticity, and payload shapes. [`whitebox-mail-mailgun`](../integrations/whitebox-mail-mailgun) and [`whitebox-mail-postmark`](../integrations/whitebox-mail-postmark) ship today; adding another is a new package implementing the same small contract, not a change here.
 
 It's not a thread tracker. The company's real email client owns multi-turn conversations — this plugin captures the *first* and *last* hop of each touch (we sent X, they replied Y) and routes anything in between as a forward to a designated company inbox. The point isn't to replace the inbox, it's to make the messages part of the customer's awareness profile.
 
@@ -12,7 +14,7 @@ It's not a thread tracker. The company's real email client owns multi-turn conve
 
 - **One outbound API for everything.** `POST /mail/outbox` (single) and `POST /mail/bulk` (up to 10k recipients) share the same template engine, per-recipient `data`, suppression checks, idempotency, and retry semantics.
 - **Public contact-form intake.** `POST /mail/inbox` accepts multipart form posts (no auth, signature-verified or rate-gated at your proxy), saves attachments, forwards to the company inbox, and links the submitter to a passport — with strong/weak identities pulled from form fields (email, phone, name, address, URLs). It is inbound-only: it never sends mail back to the submitter. For an acknowledgment auto-reply, subscribe to the `mail.received` event and send via `POST /mail/outbox`.
-- **Mailgun delivery + reply webhooks.** Signed inbound (`POST /mail/webhooks/inbox`) and tracking (`POST /mail/webhooks/tracking`) routes turn delivered/opened/clicked/bounced into a rank-ordered status machine you can subscribe to via notify events.
+- **Provider delivery + reply webhooks.** Authenticity-verified inbound (`POST /mail/webhooks/inbox`) and tracking (`POST /mail/webhooks/tracking`) routes turn delivered/opened/clicked/bounced into a rank-ordered status machine you can subscribe to via notify events. The provider normalizes its own event names into one canonical vocabulary.
 - **Two block lists, two reasons.** `suppressions` (user opt-out, reversible) and `invalid` (technical undeliverability, permanent) — both auto-populated from webhooks and exposed as CRUD endpoints.
 - **Messages become memory.** Every send and every inbound is fed to `core/awareness` with channel `mail`, so `/analytics/ask` can later answer *"have we told this customer about the refund policy?"* and cite the exact email.
 - **Identity gravity.** Form submissions attach phone/name/address/URL identities to the sender's passport (deduped, libphonenumber-validated, no body-text scraping). Subsequent calls from the same phone or visits with the same email merge automatically.
@@ -23,20 +25,22 @@ It's not a thread tracker. The company's real email client owns multi-turn conve
 ### 1. Enable the plugin
 
 ```js
-// config
-{
-  plugins: [..., 'mail'],
-  mail: {
+import { mail } from 'whitebox-server-plugin-mail'
+import { mailgun } from 'whitebox-mail-mailgun'   // or: import { postmark } from 'whitebox-mail-postmark'
+
+plugins: [
+  mail({
     attachmentsFolder: '/var/lib/whitebox/mail/attachments',
     company: 'info@example.com',                  // forward target for /mail/inbox
-    mailgun: {
-      apiKey: process.env.MAILGUN_KEY,
+    // The provider is composed like a plugin and owns transport + webhook auth.
+    provider: mailgun({
+      apiKey: process.env.WB_MAILGUN_API_KEY,
       domain: 'mail.example.com',
-      webhookSigningKey: process.env.MAILGUN_HMAC,
-    },
-    auth: { secret: process.env.WHITEBOX_MAIL_TOKEN },
-  },
-}
+      webhookSigningKey: process.env.WB_MAILGUN_WEBHOOK_SIGNING_KEY,
+    }),
+    auth: { secret: process.env.WB_MAIL_TOKEN },
+  }),
+]
 ```
 
 Migrations run on startup. The plugin self-registers `mail.*` notify topics — anything that subscribes to `core/events` will see queued / sent / delivered / opened / bounced / received events.
@@ -98,16 +102,16 @@ Mount your form to POST to whitebox directly (no proxy needed):
 
 The plugin forwards to `config.mail.company` and links the submitter to a whitebox passport. Add hidden `utm_*` fields if you want campaign attribution to flow into awareness.
 
-### 5. Wire Mailgun webhooks
+### 5. Wire the provider webhooks
 
-In Mailgun, point both *Inbound* and *Tracking* webhooks at:
+Point your provider's *Inbound* and *Tracking* (delivery/open/click/bounce/complaint) webhooks at:
 
 ```
-POST https://wb.example.com/mail/webhooks/inbox      (multipart, signed)
-POST https://wb.example.com/mail/webhooks/tracking   (JSON, signed)
+POST https://wb.example.com/mail/webhooks/inbox
+POST https://wb.example.com/mail/webhooks/tracking
 ```
 
-No auth — Mailgun signs each request and the plugin verifies HMAC + replay window. Bounces and complaints automatically populate the respective block lists.
+No app-level bearer auth — the composed provider verifies each request's authenticity (Mailgun signs with HMAC + replay window; Postmark uses HTTP Basic auth on the webhook URL — see the provider package's README). Bounces and complaints automatically populate the respective block lists.
 
 ### 6. Subscribe to events
 
@@ -123,14 +127,13 @@ events.on('mail.bounced', ({ data }) => {
 
 ```
 src/plugins/mail/
-├── index.js          - Plugin entry; wires everything, mounts routes
+├── index.js          - Plugin entry; validates + wires the provider, mounts routes
 ├── outbox.js         - Send queue, worker, HTTP /outbox, batch ops
-├── inbox.js          - Form submissions + Mailgun inbound webhook
+├── inbox.js          - Form submissions + provider inbound webhook (provider.parseInbound)
 ├── bulk.js           - Bulk send with per-recipient data
-├── tracking.js       - Mailgun delivery webhook handler
-├── mailer.js         - Thin nodemailer + Mailgun transport wrapper
+├── tracking.js       - Provider tracking webhook → canonical event → status machine
+├── mailer.js         - Resolves attachments + delegates send to the provider
 ├── attachments.js    - UUID-named file storage
-├── signature.js      - Mailgun webhook signature verification
 ├── suppressions.js   - User opt-out list (unsubscribed/complained)
 ├── invalid.js        - Technical undeliverability list (bounced/rejected)
 └── migrations/
@@ -145,8 +148,11 @@ src/plugins/mail/
     ├── 009 create_suppressions
     ├── 010 create_invalid
     ├── 011 outbox_batch            (batch_id, data jsonb)
-    └── 012 outbox_cancelled
+    ├── 012 outbox_cancelled
+    └── 013 outbox_provider_message_id  (renames mailgun_id → provider_message_id)
 ```
+
+The provider-specific code (transport, webhook signature, payload parsing) lives **outside** this package — in [`whitebox-mail-mailgun`](../integrations/whitebox-mail-mailgun) / [`whitebox-mail-postmark`](../integrations/whitebox-mail-postmark) — each implementing: `send(msg)→{messageId}`, `verifySignature(req, kind)`, `parseInbound(req)`, `parseTracking(req)`, and optionally `ownsAddress` / `classifyError`.
 
 ## Core flows
 
@@ -166,10 +172,10 @@ Worker picks up:
   ↓ preflightBlock(to) — check invalid + suppressions → fail+notify
   ↓ identify/link recipient to passport
   ↓ render template via mikser (data overrides row fields)
-  ↓ mailer.send (Mailgun)
-      ↳ permanent error (4xx or keyword) → invalid.add + fail terminal (no retry)
+  ↓ mailer.send → provider.send
+      ↳ permanent error (provider.classifyError) → invalid.add + fail terminal (no retry)
       ↳ transient → throw → BullMQ retry with exponential backoff
-  ↓ outbox.sent() — store mailgun_id, mark sent
+  ↓ outbox.sent() — store provider_message_id, mark sent
   ↓ notify mail.sent
 ```
 
@@ -206,13 +212,12 @@ forward worker:
   mailer.send(to=company, replyTo=customer, text+html+attachments)
 ```
 
-### Inbound — Mailgun webhook (replies, ad-hoc)
+### Inbound — provider webhook (replies, ad-hoc)
 
 ```
 POST /mail/webhooks/inbox (multer.any())
-  ↓ signature.verify('Inbound')
-  ↓ stripped-text || body-plain → body
-    body-html → body_html (raw, sanitize on render)
+  ↓ provider.verifySignature(req, 'inbound')
+  ↓ provider.parseInbound(req) → { from, to, subject, body, bodyHtml, attachments[] }
   ↓ saveBuffer() any attachments
   ↓ identify/link sender passport
   ↓ insert inbox row (source='inbound')
@@ -220,19 +225,21 @@ POST /mail/webhooks/inbox (multer.any())
   ← 200
 ```
 
-No forward — Mailgun routes handle that.
+No forward — the provider's inbound routing handles that.
 
 ### Tracking webhook
 
 ```
-POST /mail/webhooks/tracking (no auth — signed)
-  ↓ signature.verify('Tracking')
-  ↓ status map: delivered/opened/clicked→engaged/failed→bounced/complained
+POST /mail/webhooks/tracking (no bearer — provider-verified)
+  ↓ provider.verifySignature(req, 'tracking')
+  ↓ provider.parseTracking(req) → { messageId, event, recipient, severity, errorMessage }
+      (provider normalizes its event names → canonical: delivered/opened/clicked/bounced/complained/unsubscribed)
+  ↓ status map: delivered/opened/clicked→engaged/bounced/complained
   ↓ outbox.track() — advances status only if higher rank (no regression)
   ↓ notify mail.<status>
   ↓ classify side-effects:
       unsubscribed/complained → suppressions.add
-      failed + severity=permanent → invalid.add (bounced)
+      bounced + severity=permanent → invalid.add
 ```
 
 ## The two block lists
@@ -240,11 +247,11 @@ POST /mail/webhooks/tracking (no auth — signed)
 | List | Source | Reversible | Meaning |
 |---|---|---|---|
 | `suppressions` | unsubscribed/complained webhooks + manual API | yes (re-subscribe) | user intent — "I shouldn't send" |
-| `invalid` | hard bounces + mailer.send 4xx/keyword + manual | no | technical — "I can't send" |
+| `invalid` | hard bounces + permanent send errors + manual | no | technical — "I can't send" |
 
 Both are checked in the outbox worker's `preflightBlock()`. Both expose CRUD APIs at `/mail/suppressions` and `/mail/invalid`.
 
-`invalid.classifyMailerError(err)` decides if a send error is permanent (4xx status OR matches `/invalid|no recipients|syntax|address rejected|not a valid email|free user|not allowed|does not exist|user unknown|mailbox/i`). Permanent → block address forever; transient → retry.
+`provider.classifyError(err)` (with `invalid.classifyMailerError` as the built-in fallback) decides if a send error is permanent. Permanent → block address forever; transient → retry.
 
 ## Outbox status machine
 
@@ -288,9 +295,9 @@ templates.renderText({ layout: row.template, ...row, ...(row.data || {}) })
 
 ## Signature & auth
 
-- `signature.verify()` — synchronous Mailgun HMAC + timestamp window check (default 5min). Context label (`Tracking`/`Inbound`) is logged on rejection.
+- `provider.verifySignature(req, kind)` — webhook authenticity, owned by the composed provider (Mailgun HMAC + replay window; Postmark HTTP Basic auth). `kind` is `'inbound'` or `'tracking'`.
 - `requireAuth` — generic bearer token middleware from `core/auth.js`. Required on `/outbox`, `/bulk*`, `/suppressions*`, `/invalid*`.
-- `/inbox` (form) is **public** — anyone can submit a contact form. Webhooks are public but signed.
+- `/inbox` (form) is **public** — anyone can submit a contact form. Webhooks are public but provider-verified.
 
 ## Notify topics
 
@@ -310,7 +317,7 @@ invalid.test.js       14  classifyMailerError + CRUD
                       88 tests
 ```
 
-No test for: `mailer.js`, `attachments.js`, `signature.js`, `templates.js`, full worker integration (mocked everywhere).
+The plugin tests inject a fake provider, so they cover the plumbing regardless of provider. Each provider package (`whitebox-mail-mailgun`, `whitebox-mail-postmark`) ships its own tests for send/verify/parse. No test here for: `mailer.js`, `attachments.js`, `templates.js`, full worker integration (mocked everywhere).
 
 ## Known gaps
 
@@ -318,21 +325,19 @@ No test for: `mailer.js`, `attachments.js`, `signature.js`, `templates.js`, full
 2. No outbox `from` validation against allowed domains — anyone with auth can spoof
 3. No orphan attachment GC — files accumulate forever
 4. No worker integration test covering create→queue→worker→send
-5. No `mailer.js` / `signature.js` tests
-6. No Mailgun webhook event deduplication — same event can fire twice (outbox.track is idempotent by rank, but notify isn't)
-7. No `List-Unsubscribe` header injection — relies on Mailgun's UI-side handling
+5. No `mailer.js` test (the provider packages test send themselves)
+6. No provider webhook event deduplication — same event can fire twice (outbox.track is idempotent by rank, but notify isn't)
+7. No `List-Unsubscribe` header injection — relies on the provider's UI-side handling
 8. No templates list/preview endpoint — can't introspect available mikser layouts
 
 ## Config shape
 
 ```js
-config.mail = {
+mail({
   attachmentsFolder: '/var/lib/whitebox/mail/attachments',
   company: 'info@example.com',
-  mailgun: {
-    apiKey, domain, webhookSigningKey,
-  },
-  webhookReplayWindowMs: 5 * 60 * 1000,
+  provider: mailgun({ apiKey, domain, webhookSigningKey, replayWindowMs: 5 * 60 * 1000 }),
+  // …or postmark({ serverToken, from, webhookUser, webhookPassword })
   webhooks: [ /* outbound notify webhook configs */ ],
   auth: { secret: '...' },
   outbox: {
@@ -342,7 +347,7 @@ config.mail = {
     stuckThresholdMs: 10 * 60 * 1000,
     stuckCheckIntervalMs: 60 * 1000,
   },
-}
+})
 ```
 
 ## Design properties

@@ -26,7 +26,7 @@ This is a monorepo (npm workspaces) — each package publishes independently.
 | package | what it does |
 |---|---|
 | [`whitebox-server`](whitebox-server) | Core: HTTP server, awareness, passports, sessions, MCP, plugin loader |
-| [`whitebox-server-plugin-mail`](whitebox-server-plugin-mail) | Outbound (transactional + bulk), inbound (form + Mailgun), tracking, suppressions |
+| [`whitebox-server-plugin-mail`](whitebox-server-plugin-mail) | Outbound (transactional + bulk), inbound (form + provider webhook), tracking, suppressions — pluggable provider |
 | [`whitebox-server-plugin-voip`](whitebox-server-plugin-voip) | Asterisk ARI observer, recording, Whisper transcription, trackable-number pool |
 | [`whitebox-server-plugin-crm`](whitebox-server-plugin-crm) | Webhook ingestion of records + facts from external systems |
 | [`whitebox-server-plugin-engagement`](whitebox-server-plugin-engagement) | Text / image / video engagement fed into awareness |
@@ -44,14 +44,15 @@ This is a monorepo (npm workspaces) — each package publishes independently.
 
 ## Integrations
 
-Third-party adapters live in **their own repos**, not this monorepo. Each is a self-contained package that composes into config like a plugin — ad networks (Meta/Google/TikTok Conversions APIs + pixels) and MCP auth providers (Auth0 and other OAuth resource-server verifiers):
+Third-party adapters live in **their own repos**, not this monorepo. Each is a self-contained package that composes into config like a plugin — ad networks (Meta/Google/TikTok Conversions APIs + pixels), mail providers (Mailgun/Postmark), and MCP auth providers (Auth0 and other OAuth resource-server verifiers):
 
 | package | composes into | what it does |
 |---|---|---|
 | `whitebox-adnetworks-meta` · `-google` · `-tiktok` | `conversions({ networks: […] })` | server CAPI fan-out (`.`) + browser pixel (`/client`), deduped by `event_id` |
+| `whitebox-mail-mailgun` · `whitebox-mail-postmark` | `mail({ provider: … })` | send + transport, inbound/tracking webhook parsing, webhook signature verification |
 | `whitebox-server-auth-auth0` | `mcp: { auth: auth0({…}) }` | JWT/OAuth verifier for the `/mcp` endpoint + RFC 9728 discovery |
 
-The shared kernel [`whitebox-adnetworks`](whitebox-adnetworks) (zod schemas, canonical events, identity helpers) and the pluggable MCP auth seam in [`whitebox-server`](whitebox-server) stay in-tree; only the provider specifics live outside.
+The shared kernel [`whitebox-adnetworks`](whitebox-adnetworks) (zod schemas, canonical events, identity helpers), the mail plugin's provider seam, and the pluggable MCP auth seam in [`whitebox-server`](whitebox-server) stay in-tree; only the provider specifics live outside.
 
 To develop against them, clone each into `./integrations` — the `integrations/*` workspace glob links them locally, and the folder is gitignored so the monorepo tracks none of their source:
 

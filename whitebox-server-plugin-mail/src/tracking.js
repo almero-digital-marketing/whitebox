@@ -1,13 +1,15 @@
 import * as suppressions from './suppressions.js'
 import * as invalid from './invalid.js'
-import * as signature from './signature.js'
 import * as outbox from './outbox.js'
 
+// The provider normalizes its own event names into this canonical vocabulary
+// (delivered | opened | clicked | bounced | complained | unsubscribed); here we
+// map the deliverability subset onto internal outbox statuses.
 const statusMap = {
   delivered: 'delivered',
   opened: 'opened',
   clicked: 'engaged',
-  failed: 'bounced',
+  bounced: 'bounced',
   complained: 'complained',
 }
 
@@ -22,9 +24,10 @@ const ENGAGEMENT_STATUSES = new Set(['opened', 'engaged'])
 let notify
 let awareness
 let logger
+let provider
 
 export function init(deps) {
-  ;({ notify, awareness, logger } = deps)
+  ;({ notify, awareness, logger, provider } = deps)
 }
 
 async function recordEngagement(row, status) {
@@ -43,9 +46,9 @@ async function recordEngagement(row, status) {
       content_id:  `mail:${row.id}:${status}`,
       text:        `${status === 'engaged' ? 'Clicked in' : 'Opened'}: ${row.subject || '(no subject)'}`,
       meta: {
-        outbox_id:  row.id,
-        mailgun_id: row.mailgun_id,
-        to:         row.to,
+        outbox_id:           row.id,
+        provider_message_id: row.provider_message_id,
+        to:                  row.to,
         status,
       },
     })
@@ -55,22 +58,21 @@ async function recordEngagement(row, status) {
 }
 
 export async function handle(req, res) {
-  if (!signature.verify(req.body?.signature, 'Tracking')) {
+  // The provider owns webhook authenticity and its own event payload shape,
+  // normalizing it into { messageId, event, recipient, severity, errorMessage }.
+  if (!provider.verifySignature(req, 'tracking')) {
     return res.status(401).end()
   }
 
-  const eventData = req.body?.['event-data']
-  const event = eventData?.event
-  const mailgunId = eventData?.message?.headers?.['message-id']
-  const recipient = eventData?.recipient
-  const severity = eventData?.severity
-  const errorMessage = eventData?.['delivery-status']?.message || eventData?.reason || null
+  const ev = provider.parseTracking(req) || {}
+  const { messageId, event, recipient, severity } = ev
+  const errorMessage = ev.errorMessage || null
 
   // --- Outbox status tracking ---
   const status = statusMap[event]
-  if (status && mailgunId) {
-    const row = await outbox.track(mailgunId, status).catch(err => {
-      logger.error({ err }, 'Failed to track outbox status: %s %s', mailgunId, status)
+  if (status && messageId) {
+    const row = await outbox.track(messageId, status).catch(err => {
+      logger.error({ err }, 'Failed to track outbox status: %s %s', messageId, status)
       return null
     })
     if (row) {
@@ -86,7 +88,7 @@ export async function handle(req, res) {
     else if (event === 'complained') reason = 'complained'
 
     if (reason) {
-      await suppressions.add({ email: recipient, reason, source: 'mailgun' }).catch(err => {
+      await suppressions.add({ email: recipient, reason, source: provider.name }).catch(err => {
         logger.error({ err }, 'Failed to add suppression: %s', recipient)
       })
     }
@@ -94,11 +96,11 @@ export async function handle(req, res) {
 
   // --- Invalid list (technical undeliverability) ---
   // Hard bounces only — soft bounces should be retried, not blocklisted
-  if (recipient && event === 'failed' && severity === 'permanent') {
+  if (recipient && event === 'bounced' && severity === 'permanent') {
     await invalid.add({
       email: recipient,
       reason: 'bounced',
-      source: 'mailgun',
+      source: provider.name,
       errorMessage,
     }).catch(err => {
       logger.error({ err }, 'Failed to add invalid recipient: %s', recipient)

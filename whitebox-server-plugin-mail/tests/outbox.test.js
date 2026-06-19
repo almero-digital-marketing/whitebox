@@ -85,26 +85,26 @@ function makeOutbox(initialRows = {}) {
 describe('outbox.track status rank', () => {
   it('advances status forward', async () => {
     const { outbox, db } = makeOutbox()
-    await db('whitebox_mail_outbox').insert({ mailgun_id: 'msg1', status: 'sent' })
+    await db('whitebox_mail_outbox').insert({ provider_message_id: 'msg1', status: 'sent' })
     const row = await outbox.track('msg1', 'delivered')
     expect(row?.status).toBe('delivered')
   })
 
   it('does not go backwards', async () => {
     const { outbox, db } = makeOutbox()
-    await db('whitebox_mail_outbox').insert({ mailgun_id: 'msg1', status: 'opened' })
+    await db('whitebox_mail_outbox').insert({ provider_message_id: 'msg1', status: 'opened' })
     const row = await outbox.track('msg1', 'delivered')
     expect(row).toBeNull()
   })
 
   it('advances to engaged from opened', async () => {
     const { outbox, db } = makeOutbox()
-    await db('whitebox_mail_outbox').insert({ mailgun_id: 'msg1', status: 'opened' })
+    await db('whitebox_mail_outbox').insert({ provider_message_id: 'msg1', status: 'opened' })
     const row = await outbox.track('msg1', 'engaged')
     expect(row?.status).toBe('engaged')
   })
 
-  it('returns null for unknown mailgun_id', async () => {
+  it('returns null for unknown provider_message_id', async () => {
     const { outbox } = makeOutbox()
     const row = await outbox.track('unknown', 'delivered')
     expect(row).toBeNull()
@@ -112,7 +112,7 @@ describe('outbox.track status rank', () => {
 
   it('returns null for unknown status', async () => {
     const { outbox, db } = makeOutbox()
-    await db('whitebox_mail_outbox').insert({ mailgun_id: 'msg1', status: 'sent' })
+    await db('whitebox_mail_outbox').insert({ provider_message_id: 'msg1', status: 'sent' })
     const row = await outbox.track('msg1', 'bogus')
     expect(row).toBeNull()
   })
@@ -137,7 +137,7 @@ describe('outbox.create idempotency', () => {
 describe('outbox.failed', () => {
   it('marks row as failed when terminal', async () => {
     const { outbox, db } = makeOutbox()
-    await db('whitebox_mail_outbox').insert({ mailgun_id: 'msg1', status: 'queued' })
+    await db('whitebox_mail_outbox').insert({ provider_message_id: 'msg1', status: 'queued' })
     const rows = db('whitebox_mail_outbox').store?.['whitebox_mail_outbox'] ?? []
     const id = rows[0]?.id ?? 1
     const row = await outbox.failed(id, { reason: 'timeout', attempts: 5, terminal: true })
@@ -147,7 +147,7 @@ describe('outbox.failed', () => {
 
   it('does not mark as failed when not terminal', async () => {
     const { outbox, db } = makeOutbox()
-    await db('whitebox_mail_outbox').insert({ mailgun_id: 'msg1', status: 'queued' })
+    await db('whitebox_mail_outbox').insert({ provider_message_id: 'msg1', status: 'queued' })
     const rows = db('whitebox_mail_outbox').store?.['whitebox_mail_outbox'] ?? []
     const id = rows[0]?.id ?? 1
     const row = await outbox.failed(id, { reason: 'timeout', attempts: 2, terminal: false })

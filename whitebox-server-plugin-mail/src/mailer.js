@@ -1,35 +1,23 @@
 import path from 'path'
-import nodemailer from 'nodemailer'
-import mg from 'nodemailer-mailgun-transport'
 
-// Dependencies captured once via init() — module-level singleton, no
-// wrapping factory closure. Matches the core pattern.
-let domain
+// Provider-agnostic send. The composed provider (whitebox-mail-mailgun,
+// whitebox-mail-postmark, …) owns the SDK/transport; this module only resolves
+// stored attachments to local paths and delegates. Captured once via init().
+let provider
 let attachmentsFolder
-let transport
 
 export function init(deps) {
-  const { apiKey, domain: d } = deps.config.mail.mailgun
-  domain = d
-  attachmentsFolder = deps.config.mail.attachmentsFolder
-  transport = nodemailer.createTransport(mg({ auth: { api_key: apiKey, domain } }))
+  provider = deps.provider
+  attachmentsFolder = deps.attachmentsFolder
 }
 
-export async function send({ from, to, replyTo, subject, html, text, headers, attachments = [], track = false }) {
-  const resolved = attachments.map(url => ({
-    path: path.join(attachmentsFolder, path.basename(url)),
-  }))
-
-  const info = await transport.sendMail({
-    from: from || `noreply@${domain}`,
-    to,
-    replyTo,
-    subject,
-    html,
-    text,
-    headers,
-    attachments: resolved,
-    'o:tracking': track ? 'yes' : 'no',
+export async function send({ attachments = [], ...msg }) {
+  // Saved attachments are public URLs/filenames; resolve each to a local path
+  // the provider can read and format for its own API (path for an SMTP-style
+  // transport, base64 for a JSON API, etc.).
+  const resolved = attachments.map(url => {
+    const filename = path.basename(url)
+    return { filename, path: path.join(attachmentsFolder, filename) }
   })
-  return info
+  return provider.send({ ...msg, attachments: resolved })
 }
