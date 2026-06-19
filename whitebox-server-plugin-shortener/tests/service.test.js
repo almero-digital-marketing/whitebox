@@ -61,6 +61,39 @@ describe('createLink', () => {
     setup()
     await expect(service.createLink({ url: 'ftp://x/y' })).rejects.toMatchObject({ status: 400 })
   })
+
+  it('bakes UTM params into the destination query and mirrors them into data', async () => {
+    setup()
+    await service.createLink({
+      url: 'https://clinic.com/whitening',
+      utm: { source: 'email', medium: 'mail', campaign: 'spring', id: '42' },
+    })
+    const row = store.insertLink.mock.calls.at(-1)[0]
+    const u = new URL(row.url)
+    expect(u.searchParams.get('utm_source')).toBe('email')
+    expect(u.searchParams.get('utm_medium')).toBe('mail')
+    expect(u.searchParams.get('utm_campaign')).toBe('spring')
+    expect(u.searchParams.get('utm_id')).toBe('42')
+    expect(row.data).toMatchObject({ utm_source: 'email', utm_campaign: 'spring' })
+  })
+
+  it('overrides existing utm_* while preserving other query params', async () => {
+    setup()
+    await service.createLink({
+      url: 'https://clinic.com/promo?ref=abc&utm_source=old',
+      utm: { source: 'email', campaign: 'spring' },
+    })
+    const u = new URL(store.insertLink.mock.calls.at(-1)[0].url)
+    expect(u.searchParams.get('utm_source')).toBe('email')   // overridden
+    expect(u.searchParams.get('utm_campaign')).toBe('spring') // added
+    expect(u.searchParams.get('ref')).toBe('abc')             // preserved
+  })
+
+  it('ignores empty/missing utm fields and leaves the url untouched when no utm', async () => {
+    setup()
+    await service.createLink({ url: 'https://clinic.com/x', utm: { source: '', medium: undefined } })
+    expect(store.insertLink.mock.calls.at(-1)[0].url).toBe('https://clinic.com/x')
+  })
 })
 
 describe('resolveRedirect', () => {

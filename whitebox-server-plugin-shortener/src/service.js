@@ -19,12 +19,20 @@ class BadRequest extends Error { constructor(m) { super(m); this.status = 400 } 
 // ── create ───────────────────────────────────────────────────────────────
 
 export async function createLink(input = {}) {
-  const { url, passport_id, identify, data = {}, label = null, code: vanity,
+  const { url, passport_id, identify, data = {}, label = null, code: vanity, utm,
           ttlSec = config.defaultTtlSec, identityTtlSec = config.identityTtlSec, maxClicks = null } = input
 
   let dest
   try { dest = new URL(url) } catch { throw new BadRequest('url must be an absolute URL') }
   if (!/^https?:$/.test(dest.protocol)) throw new BadRequest('url must be http(s)')
+
+  // Native UTM: bake the campaign params into the destination's query so every
+  // redirect carries attribution. Explicit values win over any utm_* already in
+  // the URL; other query params are preserved. Mirrored into `data` so the
+  // click's awareness record (and arrivalText label) cite the campaign.
+  const utmApplied = applyUtm(dest, utm)
+  const finalUrl = dest.toString()
+  const linkData = { ...data, ...utmApplied }
 
   // Bind to a known customer: a given passport_id (canonicalized) or an existing
   // passport resolved from identity. Unresolved identity is kept for click time.
@@ -36,7 +44,7 @@ export async function createLink(input = {}) {
   const now = new Date()
   const code = vanity || await uniqueCode()
   const row = await store.insertLink({
-    code, url, data, identify: identify || null, label, passport_id: bound, max_clicks: maxClicks,
+    code, url: finalUrl, data: linkData, identify: identify || null, label, passport_id: bound, max_clicks: maxClicks,
     expires_at:          ttlSec         ? new Date(now.getTime() + ttlSec * 1000) : null,
     identity_expires_at: identityTtlSec ? new Date(now.getTime() + identityTtlSec * 1000) : null,
   })
@@ -124,6 +132,22 @@ export async function linkStats(code) {
 export const listLinks = (opts) => store.listLinks(opts)
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+// The standard UTM vocabulary (utm_id is GA4's campaign id). Structured input
+// keys are the bare names; they're written as utm_<name> on the destination.
+const UTM_FIELDS = ['source', 'medium', 'campaign', 'term', 'content', 'id']
+
+function applyUtm(dest, utm) {
+  const applied = {}
+  if (!utm || typeof utm !== 'object') return applied
+  for (const field of UTM_FIELDS) {
+    const v = utm[field]
+    if (v == null || v === '') continue
+    dest.searchParams.set(`utm_${field}`, String(v))
+    applied[`utm_${field}`] = String(v)
+  }
+  return applied
+}
 
 function bindable(link) {
   if (!link.passport_id && !link.identify) return false           // campaign link: nothing to bind

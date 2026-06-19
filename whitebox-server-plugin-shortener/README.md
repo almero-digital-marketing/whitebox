@@ -40,9 +40,12 @@ shortener({
 ```json
 { "url": "https://clinic.com/whitening", "passport_id": "uuid",
   "identify": { "email": "jane@…" }, "data": { "name": "Jane" },
+  "utm": { "source": "email", "medium": "mail", "campaign": "spring" },
   "label": "spring-email", "ttlSec": 2592000, "identityTtlSec": 86400 }
 → { "code": "Api9AjAu", "short_url": "https://go.clinic.com/Api9AjAu", "expires_at": … }
 ```
+
+**Native UTM.** Pass `utm` with any of `source`/`medium`/`campaign`/`term`/`content`/`id` and they're baked into the destination's query (`utm_source`, …) so every redirect carries campaign attribution. Explicit values override any `utm_*` already in the URL; other query params are preserved. They're also mirrored into the link's `data`, so the click's awareness record cites the campaign. (The claim token still rides the fragment, or the query for hash-router destinations — independent of the UTM query params.)
 
 ## How a click binds
 

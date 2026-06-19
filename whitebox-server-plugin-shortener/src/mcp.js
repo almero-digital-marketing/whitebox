@@ -13,6 +13,7 @@ export function registerMcp(ctx, { service }) {
       url:         z.string().url(),
       passport_id: z.string().uuid().optional(),
       identify:    z.object({ email: z.string().email().optional(), phone: z.string().optional(), external_id: z.union([z.string(), z.number()]).optional() }).optional(),
+      utm:         z.object({ source: z.string().optional(), medium: z.string().optional(), campaign: z.string().optional(), term: z.string().optional(), content: z.string().optional(), id: z.string().optional() }).optional(),
       data:        z.record(z.string(), z.unknown()).optional(),
       label:       z.string().max(128).optional(),
       ttlSec:      z.number().int().positive().optional(),
