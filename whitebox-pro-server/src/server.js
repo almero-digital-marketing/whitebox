@@ -105,10 +105,11 @@ async function start() {
   const plugins = {}
   mcp.init({ config: config.mcp, logger })
 
-  // QUERY — the core query surface (REST /query + /preview, MCP whitebox.query +
-  // whitebox.preview) over the selector engine. Registered before plugins (and
+  // QUERY — the core query surface (REST /query + /preview + /ask, MCP
+  // whitebox.query + whitebox.preview) over the selector engine. /ask is the
+  // synthesis layer (knowledge + LLM), REST-only. Registered before plugins (and
   // before mcp.mount) so it's a first-class core capability. See docs/selector.md.
-  query.register(app, { selector, mcp, config, logger })
+  query.register(app, { selector, ai, mcp, config, logger })
 
   await loadPlugins(app, {
     config,
