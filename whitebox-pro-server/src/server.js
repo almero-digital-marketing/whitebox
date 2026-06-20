@@ -24,6 +24,7 @@ import * as templates from './templates.js'
 import * as awareness from './awareness/index.js'
 import * as facts from './facts/index.js'
 import * as selector from './selector/index.js'
+import * as query from './query/index.js'
 import * as context from './context.js'
 import * as mcp from './mcp.js'
 import createAuth, { resolveMcpAuth } from './auth.js'
@@ -103,6 +104,11 @@ async function start() {
 
   const plugins = {}
   mcp.init({ config: config.mcp, logger })
+
+  // QUERY — the core query surface (REST /query + /preview, MCP whitebox.query +
+  // whitebox.preview) over the selector engine. Registered before plugins (and
+  // before mcp.mount) so it's a first-class core capability. See docs/selector.md.
+  query.register(app, { selector, mcp, config, logger })
 
   await loadPlugins(app, {
     config,
