@@ -19,8 +19,11 @@ questions about it in natural language, over HTTP or MCP.
 4. **Channels are plugins** — mail, SMS, voip, engagement, crm, conversions,
    audiences, shortener. Each owns its endpoints and writes to awareness; none
    import each other.
-5. You **query** the memory through the analytics plugin (`/analytics/ask`,
-   `recall`, `timeline`) or over **MCP**, so an LLM/agent can read and act directly.
+5. You **query** the memory through the core **QUERY** surface — REST `POST /query`,
+   `/preview`, `/ask`, `/funnel` and MCP `whitebox.query`, `whitebox.preview`,
+   `whitebox.funnel` (a selector engine over both memories) — with the analytics
+   plugin (`/analytics/ask`, `recall`, `timeline`) as a higher-level convenience.
+   Either way an LLM/agent reads and acts directly over **MCP**.
 
 Your app stays separate and reaches in over HTTP or MCP — it never imports
 WhiteBox internals.
@@ -30,14 +33,16 @@ WhiteBox internals.
 1. **[01 · Overview](01-overview.md)** — what WhiteBox is, where it fits, and the
    shape of the system.
 2. **[02 · Concepts](02-concepts.md)** — passports & identity merging, sessions,
-   awareness, the `direction` vocabulary, channels, the context registry.
+   the two memories (awareness + facts), the `direction` vocabulary, the selector,
+   channels, the context registry.
 3. **[03 · Getting started](03-getting-started.md)** — prerequisites, install,
    `.env`, the config file, first run, first requests end-to-end.
 4. **[04 · Configuration](04-configuration.md)** — the config factory, every
    top-level key, the plugin pattern, and the full `WB_*` environment reference.
-5. **[05 · Awareness & querying](05-awareness-and-querying.md)** — how memory is
-   recorded and how you read it back: `recall`, `population`, `timeline`, and the
-   grounded `ask`.
+5. **[05 · Awareness & querying](05-awareness-and-querying.md)** — reading the two
+   memories: the core QUERY surface (the selector, `/query` · `/preview` · `/ask` ·
+   `/funnel`), plus the `/analytics/*` conveniences (`recall`, `population`,
+   `timeline`, `ask`).
 6. **[06 · MCP](06-mcp.md)** — the `/mcp` endpoint, auth (static token or Auth0),
    connecting a client, and the full tool catalog across plugins.
 7. **[07 · Channels](07-channels.md)** — per-channel usage: mail, sms, engagement,

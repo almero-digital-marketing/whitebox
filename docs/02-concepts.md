@@ -1,7 +1,8 @@
 # 02 · Concepts
 
-Five things to understand before anything else: **passport**, **session**,
-**awareness**, **direction**, and the **context registry**.
+The things to understand before anything else: **passport**, **session**, the two
+memories — **awareness** (semantic) and **facts** (structured) — **direction**, the
+**selector** (one query over both memories), and the **context registry**.
 
 ## Passports & identity
 
@@ -75,6 +76,46 @@ What happens to it:
 
 So "record" is cheap and synchronous; embedding is async and deduplicated.
 
+## Facts — the structured memory
+
+Awareness is unstructured memory (text → embeddings → fuzzy recall). **Facts** is
+its **structured twin**: an append-only, typed, per-passport timeline of exact
+attributes — `plan_tier`, `mrr`, `subscription_status`, `renewal_date`, and the
+like. Where awareness answers "what has this person seen / said," facts answers
+"what is true about this person, and what *was* true."
+
+```
+awareness  =  append-only SEMANTIC   memory   (ts,          text → embedded)         → fuzzy
+facts      =  append-only STRUCTURED memory   (observed_at, key, value:type)         → exact
+```
+
+A **fact** is one observation of one attribute at one time, written through the
+core `ctx.facts` primitive — the structured counterpart of `awareness.record()`:
+
+```js
+ctx.facts.record({
+  passport_id,             // who
+  key: 'plan_tier',        // the attribute
+  value: 'pro',            // typed: "pro" | 240 | true | "2026-07-01"
+  type: 'string',          // 'string' | 'number' | 'bool' | 'date'
+  source: 'stripe',        // where it came from — no source is privileged
+  observed_at: '2026-04-10',// VALID time: when this value became true
+  entity: 'subscription:sub_123', // optional link to an external entity
+})
+```
+
+Nothing is ever overwritten — a value change is a **new row**. So **current** =
+the latest value per key, and **as of D** = the value whose validity window
+contains `D` (`max(observed_at ≤ D)`). That makes two things honest that a
+latest-only store can't do: querying on a fact's *value* (not just its presence),
+and **time travel** — "was this customer Pro on Black Friday," "downgraded in the
+last 30 days." History also unlocks *transition* predicates (`changed`,
+`transition`, `decreased`, `increased`).
+
+Sources write facts; no source *owns* them. The CRM plugin is just the most common
+source — it ingests external records and turns each scalar into a `ctx.facts`
+call (see [the context registry](#the-context-registry) below).
+
 ## Direction — the most important field
 
 `direction` captures **who acted and how strong the signal is**. It's the axis you
@@ -104,13 +145,40 @@ the awareness it writes. Plugins are independent: they communicate only through 
 shared `ctx` (database, queue, events, passports, awareness, …), never by importing
 one another. See [07 · Channels](07-channels.md).
 
+## The selector — one query over both memories
+
+The two memories are queried through one shape: a **selector**.
+
+```js
+selector = { about?, filter?, judge? }   // all three optional
+```
+
+- **`about`** — a semantic topic (vector over awareness). Ranks evidence
+  (knowledge) or gates people (a similarity floor).
+- **`filter`** — a boolean tree (`all` / `any` / `not`) of deterministic clauses:
+  `fact` (a typed value/temporal gate over the **facts** timeline) and `metric`
+  (a windowed aggregate over the **awareness** event stream).
+- **`judge`** — an optional LLM membership predicate, for nuance the other two
+  can't express. It decides *who's in*; it never writes prose.
+
+A selector **resolves** to a projection — **people** (a cohort) or **knowledge**
+(ranked evidence) — and `asOf` time-travels both memories together. This is the
+**core QUERY surface**: analytics and audiences both speak this one predicate
+rather than two filter languages. The querying chapter covers it in full —
+[05 · Awareness & querying](05-awareness-and-querying.md).
+
 ## The context registry
 
-Awareness is unstructured memory (text). The **context registry** is the
-structured counterpart: a plugin can register a provider that returns typed facts
-about a passport (e.g. CRM's `plan_tier`, `mrr`, subscription status). When you
+Awareness is unstructured memory (text); the structured side of a person now lives
+in the **[facts](#facts--the-structured-memory)** memory. The **context registry**
+is the seam that surfaces structured state to the `/analytics/ask` layer: a plugin
+registers a provider that returns typed facts about a passport (e.g. `plan_tier`,
+`mrr`, subscription status — the CRM provider surfaces `facts.current`). When you
 `ask` a question about a customer, WhiteBox assembles both — recalled awareness
-chunks **and** registered context — and grounds the LLM's answer in them. The
-audiences plugin uses the same context for its `crm` rule conditions.
+chunks **and** registered context — and grounds the LLM's answer in them.
+
+> Structured CRM state is no longer the CRM plugin's private store — it's written
+> into the core **facts** memory (`ctx.facts`), so the selector's `filter.fact`
+> clauses read the same truth the context provider surfaces.
 
 Next: **[03 · Getting started](03-getting-started.md)**.

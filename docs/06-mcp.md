@@ -57,10 +57,33 @@ The server advertises its tool/resource/prompt catalog on connect.
 
 ## Tool catalog
 
-Tools are contributed by the plugins you enable. Naming: the analytics tools are
-the headline `whitebox.*` set; each channel namespaces its own.
+The **core QUERY** tools are always present (core exposes the selector engine
+directly); everything else is contributed by the plugins you enable. Naming: the
+core query and analytics tools are the headline `whitebox.*` set; each channel
+namespaces its own.
+
+### Core QUERY — the selector (from core)
+
+The core query surface over both memories (semantic **awareness** + structured
+**facts**), exposed as MCP tools that mirror the REST endpoints in
+[05 · Querying](05-awareness-and-querying.md#core-query--the-selector):
+
+| tool | purpose |
+|---|---|
+| `whitebox.query` | resolve a selector `{ about, filter, judge }` into a projection — `knowledge` (ranked evidence) or `people` (a cohort `{ count, passports }`); `asOf` time-travels, `group: { by }` returns a `[{ bucket, value }]` series for charts |
+| `whitebox.preview` | cost-gate a `people` selector *before* running/saving — about-cohort size, filter survivors (= the judge-call count), full-scan flag, and a sampled judge rate when a judge is present |
+| `whitebox.funnel` | resolve ordered, windowed steps → a drop-off report plus per-step (`step:N`) and gap (`gap:N→M`, `pending`/`dropped`) cohorts |
+
+> **No MCP `ask` by design.** Answering is *generation*, and an MCP client is
+> already an LLM agent — so it queries `whitebox.query` for `knowledge` and
+> synthesizes the answer in its own context. The natural-language `/ask` layer is
+> REST-only (for non-agent callers like a dashboard); see
+> [05 · ask](05-awareness-and-querying.md#ask--a-natural-language-answer-rest-only).
+> For a `people` query, run `whitebox.preview` first to see the judge cost.
 
 ### Analytics — read & reason (from `analytics`)
+
+The higher-level, awareness-focused conveniences (callers of the core engine):
 
 | tool | purpose |
 |---|---|
@@ -78,7 +101,7 @@ the headline `whitebox.*` set; each channel namespaces its own.
 |---|---|
 | mail | `mail.send` · `mail.outbox_get` · `mail.inbox_list` · `mail.inbox_get` · `mail.suppress` · `mail.unsuppress` |
 | sms | `sms.send` · `sms.outbox_get` · `sms.inbox_list` · `sms.suppress` · `sms.unsuppress` |
-| crm | `crm.upsert_record` · `crm.add_fact` · `crm.list_records` · `crm.get_record` |
+| crm | `crm.upsert_record` · `crm.add_fact` · `crm.get_state` |
 | engagement | `engagement.list_content` · `engagement.get_content` · `engagement.invalidate_content` |
 | conversions | `conversions.list_events` |
 | shortener | `shortener.create_link` · `shortener.list_links` · `shortener.link_stats` |
@@ -90,10 +113,12 @@ recent voip calls) for browsing.
 
 ## A typical agent flow
 
-1. `whitebox.recall` / `whitebox.timeline` to understand a customer.
-2. `whitebox.ask` for a grounded summary.
+1. `whitebox.query` (`knowledge`) — or `whitebox.recall` / `whitebox.timeline` — to
+   understand a customer, then synthesize a summary in your own context.
+2. `whitebox.query` (`people`, after `whitebox.preview`) to build a cohort over both
+   memories, or `whitebox.funnel` for a windowed drop-off.
 3. `mail.send` or `sms.send` to follow up — or `audiences_draft_rule` →
-   `audiences_preview_rule` → `audiences_create_rule` to build a segment.
+   `audiences_preview_rule` → `audiences_create_rule` to activate a segment.
 
 Because tools share the same identity, auth, and awareness as the HTTP API, an
 agent acting over MCP is indistinguishable from your app acting over HTTP — every

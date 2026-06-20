@@ -109,10 +109,13 @@ videos, `a[href]`). MCP: `engagement.list_content`, `get_content`,
 
 ## CRM
 
-Ingest customer state from external systems (Salesforce, Stripe, Zendesk, …) as
-**records** (structured: subscriptions, deals, tickets) and **facts** (free-form:
-notes, tags, call summaries). Records are queryable structured state; facts flow
-into awareness as observations.
+A **thin facts adapter** — it owns no store of its own. Ingest customer state from
+external systems (Salesforce, Stripe, Zendesk, …) as **records** (structured:
+subscriptions, deals, tickets) that write into the **core facts** memory
+(`ctx.facts`), and **notes** (free-form: notes, tags, call summaries) that flow into
+awareness as observations. A record's `status` becomes a fact keyed by `kind`, each
+scalar in `data` its own fact — so state is queryable through the selector's
+`filter.fact` (audiences/analytics never go through a CRM-specific path).
 
 ```js
 crm({ auth: { secret: process.env.WB_CRM_TOKEN } })
@@ -120,17 +123,18 @@ crm({ auth: { secret: process.env.WB_CRM_TOKEN } })
 
 | endpoint | auth | purpose |
 |---|---|---|
-| `POST /crm/records` | Bearer | upsert structured records (by source/kind/external_id) |
-| `POST /crm/facts` | Bearer | add free-form facts → awareness (`observation`) |
-| `GET /crm/records/:passport_id` | Bearer | list a passport's records |
+| `POST /crm/records` | Bearer | upsert structured state → core facts (status → fact keyed by `kind`, each `data` scalar → its own fact) |
+| `POST /crm/facts` | Bearer | add free-text notes → awareness (`observation`) |
+| `GET /crm/records/:passport_id` | Bearer | a passport's **current facts** as `{ data: { key: value, … } }` |
 | `POST /crm/observe` | none (explicit passport) | low-trust client-reported observations |
 
 **Identity:** each call carries a `customer: { email?, phone?, external_id? }`; CRM
 resolves or creates the passport (returns `202` if no identity given). **Awareness:**
-facts → channel `crm`, direction `observation`. The browser client plugin
+notes → channel `crm`, direction `observation`. The browser client plugin
 (`whitebox-pro-client-plugin-crm`) reports UI observations (`completed onboarding`,
-`added to cart`) tagged `source: client`. MCP: `crm.upsert_record`, `add_fact`,
-`list_records`, `get_record`.
+`added to cart`) tagged `source: client`. MCP: `crm.upsert_record`, `crm.add_fact`,
+`crm.get_state` (current `{ key: value }` facts; for history/transitions/cross-customer
+use the core `whitebox.query`). The old `whitebox_crm_records` table was dropped.
 
 → [`whitebox-pro-server-plugin-crm`](../whitebox-pro-server-plugin-crm).
 
@@ -205,28 +209,45 @@ record to awareness (`conversion`). MCP: `conversions.list_events`.
 
 ## Audiences
 
-An AI audience builder. Write declarative **rules** over what WhiteBox knows
-(semantic interest + deterministic metrics + CRM facts); for each qualifying
-passport it fires a custom event to Meta/TikTok/GA4, which build and age the actual
-audience. WhiteBox owns *qualification*; the platform owns *membership*.
+An AI audience builder. A **rule** is a saved core **selector** (or a funnel slot);
+the core selector engine (`ctx.selector`) resolves the qualified cohort and the
+plugin only **activates** it — for each qualifying passport it fires a custom event
+to Meta/TikTok/GA4, which build and age the actual audience. WhiteBox owns
+*qualification*; the platform owns *membership*.
 
 ```js
 audiences({
   auth: { secret: process.env.WB_AUDIENCES_TOKEN },
-  evaluation: { model: 'gpt-4o-mini', candidateSimilarity: 0.72, keepWarmDays: 7 },
+  evaluation: { model: 'gpt-4o-mini', keepWarmDays: 7 },
   networks: [ meta({…}), tiktok({…}), google({…}) ],
   privacy: { requireConsentCategory: 'marketing',
              sensitiveCategories: ['health','finance','religion','sexuality','politics'] },
 })
 ```
 
-Rules combine three **evidence families** — `semantic` (vector recall + LLM judge),
-`metric` (SQL gates like `distinct_sessions ≥ 2`, evaluated *before* the LLM), and
-`crm` (per-passport facts). A rich REST + MCP surface lets you draft (AI), preview
-(dry-run with cost), create, evaluate, and inspect rules and deliveries — e.g.
-`POST /audiences/rules`, `…/rules/:id/preview`, `GET /audiences/deliveries`. MCP:
-`audiences_draft_rule`, `audiences_preview_rule`, `audiences_create_rule`,
-`audiences_evaluate`, `audiences_explain_match`, …
+A rule has **exactly one source**. Either a `select` — a core selector of
+`{ about, filter, judge }` (`about` = semantic narrow, `filter` = boolean tree of
+`fact` + `metric` clauses, `judge` = optional LLM membership predicate) — or a
+`funnel` + `slot` (`"step:N"` | `"gap:N→M"`, with an optional `status`
+pending/dropped — the retargeting payoff):
+
+```js
+{ id: 'enterprise_ready', name: 'Ready for Enterprise', enabled: true,
+  select: {
+    about:  'SSO, security, scale, seat limits',
+    filter: { all: [ { fact: { plan_tier: { eq: 'pro' } } },
+                     { metric: { content: 'pricing', count: { gte: 1 }, last: '30d' } } ] },
+    judge:  { criteria: 'genuinely evaluating an Enterprise upgrade', confidence: 0.7 } },
+  ttl_days: 30,
+  delivery: { meta: { event: 'wb_enterprise_ready' }, tiktok: { event: 'wb_enterprise_ready' } } }
+```
+
+The plugin delegates all selection to the engine; it only handles activation
+(deliver Mode-A events to Meta/TikTok/GA4) and keep-warm. A rich REST + MCP surface
+lets you draft (AI), preview (dry-run with cost), create, evaluate, and inspect rules
+and deliveries — e.g. `POST /audiences/rules`, `…/rules/:id/preview`,
+`GET /audiences/deliveries`. MCP: `audiences_draft_rule`, `audiences_preview_rule`,
+`audiences_create_rule`, `audiences_evaluate`, `audiences_explain_match`, …
 
 The audiences package ships a full multi-chapter guide of its own.
 
