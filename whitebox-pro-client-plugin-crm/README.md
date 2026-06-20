@@ -1,4 +1,8 @@
-# whitebox-pro-client-plugin-crm
+# CRM Client Plugin
+
+> Report low-trust, client-observed facts about the current passport from the browser (UI events your app witnessed) — recorded as `source: 'client'` evidence, never authoritative state.
+
+## What it is
 
 Report **client-observed facts** about the current passport from the browser — things your app witnessed in the UI:
 

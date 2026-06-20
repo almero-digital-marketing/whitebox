@@ -1,16 +1,12 @@
-<div align="center">
+# Engagement Client Plugin
 
-# whitebox-pro-client-plugin-engagement
+> Measure what a person actually read, watched, and listened to — not just what loaded — and stream it into their cross-channel WhiteBox memory.
 
-**Measure what a person actually read, watched, and listened to — not just what loaded.**
+## What it is
 
 A browser plugin for the WhiteBox client SDK. It watches reading, image dwell, and video playback,
 decides when something was *genuinely* engaged with (settled attention, not a scroll-past), and streams
 those events to WhiteBox — where they become part of the person's cross-channel memory.
-
-</div>
-
----
 
 ## What it does
 

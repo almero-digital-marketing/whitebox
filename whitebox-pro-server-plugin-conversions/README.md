@@ -1,4 +1,8 @@
-# whitebox-pro-server-plugin-conversions
+# Conversions Plugin
+
+> Server side of conversion tracking — records each browser/server event as a first-party awareness signal and fans it out to the ad networks (Meta CAPI / GA4 MP / TikTok Events API), deduped against the browser pixels by `event_id`.
+
+## What it is
 
 Server side of conversion tracking. Receives standard/custom conversion events
 from the browser ([`whitebox-pro-client-plugin-conversions`](../whitebox-pro-client-plugin-conversions)),

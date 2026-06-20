@@ -1,4 +1,8 @@
-# whitebox-pro-server-plugin-shortener
+# Shortener Plugin
+
+> Branded short links on their own host that hide a passport behind an opaque code — a personalized link, once clicked, hard-binds the visitor's session to that customer, with native UTM attribution.
+
+## What it is
 
 Branded short links on **their own host** that hide a passport behind an opaque
 code. A personalized link, when clicked, **hard-binds** the visitor's session to

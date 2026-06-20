@@ -1,4 +1,8 @@
-# whitebox-pro-client-plugin-conversions
+# Conversions Client Plugin
+
+> Browser side of conversion tracking — fires the ad-platform pixels and POSTs the same event to whitebox-pro-server under a shared `event_id`, with one validated method per standard event.
+
+## What it is
 
 Browser side of conversion tracking. Each call does two things under one shared
 `event_id` (so the platforms dedupe):
