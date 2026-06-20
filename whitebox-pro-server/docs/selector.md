@@ -327,32 +327,86 @@ Most funnels need no special machinery — they're a single selector:
 
 The case that **does** need machinery is **windowed / ordered** steps — *"started a
 trial, then purchased within 14 days **of starting**"* — because `not B` means
-"never B," not "B in the window after A." A **funnel** is the ordered form:
+"never B," not "B in the window after A."
+
+### Shape
 
 ```js
-funnel = [
-  { select: trialStarted },               // step 1
-  { select: activated,  within: "7d" },   // step 2 — within 7d of step 1's event
-  { select: purchased,  within: "14d" },  // step 3 — within 14d of step 2's event
-]
+funnel = {
+  within: "30d",                           // OPTIONAL funnel-level total window from entry; default: none
+  steps: [
+    { select: trialStarted },              // step 1 — the entry
+    { select: activated,  within: "7d" },  // step 2 — within 7d of step 1's match
+    { select: purchased,  within: "14d" }, // step 3 — within 14d of step 2's match
+  ],
+}
 ```
 
-**Resolution** chains the cohorts via a temporal join on `matched_at`: step 1
-resolves to a cohort (each with `matched_at`); step *k* resolves **scoped to step
-k-1's cohort** and keeps only those whose event is *after* the prior step's
-`matched_at` (and within `within`), advancing the anchor each step. Steps are
-**named selectors** (reusable) or inline. Windowed steps must be **deterministic**
-(event/fact) — that's what gives the `matched_at` to anchor on; `about`/`judge`
-steps work only as un-windowed membership.
+Two kinds of window, and they compose:
 
-**Two outputs — our two projections:**
-- **drop-off report** (`knowledge`) — count at each step + conversion rate between steps.
-- **gap cohorts** (`people`) — who's at step *k*, and who **dropped** between *k* and
-  *k+1* (did step k, not step k+1 within the window). **Each gap is a re-targetable
-  audience** — "abandoned within the activation window" — which is the whole point.
+- **`step.within`** — **relative to the previous step**; the anchor **advances**, so
+  step *k*'s clock starts at step *k-1*'s `matched_at`. (Step 3's 14d is from
+  *activation*, not from *trial*.) Total funnel duration is unbounded by default — it's
+  the sum of the step windows.
+- **`funnel.within`** *(optional)* — a **fixed** total window from the **entry** (step-1
+  match), checked at the end: a completer's final `matched_at` must be ≤ `entry +
+  within`. Use it when overall velocity matters, not just step-to-step.
 
-Enabling hooks, **live in v1**: `matched_at` on the `people` result (§7), and
-**`scope: a candidate set`** on `resolve()` (feed a step's cohort to the next).
+### Resolution
+
+Step 1 resolves to a cohort (each person with `matched_at`). Step *k* resolves
+**scoped to step k-1's cohort**, keeping only those whose event is *after* the prior
+step's `matched_at` and within `step.within`, advancing the anchor. At the end, if
+`funnel.within` is set, drop completers whose total span exceeds it. Steps are
+**named selectors** (reusable) or inline; windowed steps must be **deterministic**
+(event/fact — that's the `matched_at`); `about`/`judge` steps work only as
+un-windowed membership.
+
+### Worked example
+
+The funnel above, over six people:
+
+| passport | trial | activated | purchased |
+|---|---|---|---|
+| p1 | Mar 1 | Mar 3 | Mar 10 |
+| p2 | Mar 1 | Mar 4 | **Apr 20** |
+| p3 | Mar 2 | **Mar 15** | — |
+| p4 | Mar 2 | — | — |
+| p5 | Mar 5 | Mar 6 | Mar 8 |
+| p6 | — | — | — |
+
+- **Step 1 · trial** (base) → `{p1,p2,p3,p4,p5}`, anchor = trial date. (p6: no trial.) → **5**
+- **Step 2 · activated ≤7d of step 1** → p3 activated Mar 15 > Mar 9 ✗, p4 never ✗ → `{p1,p2,p5}`, anchor → activation date → **3**
+- **Step 3 · purchased ≤14d of step 2** → p2 bought Apr 20 > Mar 18 ✗ → `{p1,p5}` → **2**
+
+*(With `funnel.within: "30d"`, both completers still qualify — p1 spans 9 days, p5 spans 3.)*
+
+**Drop-off report** (`knowledge`):
+
+| step | count | step conv. | overall |
+|---|---|---|---|
+| 1 · trial | 5 | — | 100% |
+| 2 · activated ≤7d | 3 | 60% | 60% |
+| 3 · purchased ≤14d | 2 | 67% | 40% |
+
+**Gap cohorts** (`people` → audiences):
+
+- **gap 1→2 = `{p3, p4}`** — started a trial, didn't activate within 7d → onboarding nudge.
+- **gap 2→3 = `{p2}`** — activated, didn't purchase within 14d → win-back within the window.
+
+**Why it needs the machinery:** p2 and p3 both *did the events*. An unordered
+`{ all: [trial, activated, purchased] }` would call **p2 converted** — the funnel
+flags it as a **drop-off** (purchase 47 days late). An unordered `{ all: [trial,
+activated] }` would count **p3 activated** — the funnel **drops** it (activated 13
+days after trial, outside the 7d window). "Did it, but not *in time*" is exactly what
+`matched_at` + the temporal join capture — and where the retargeting audiences live.
+
+### Outputs & hooks
+
+Both outputs are projections: the **drop-off report** is `knowledge`; the per-step and
+**gap cohorts** are `people` (each gap saveable as an audience). Enabling hooks, **live
+in v1**: `matched_at` on the `people` result (§7), and **`scope: a candidate set`** on
+`resolve()` (feed a step's cohort to the next).
 
 ### Out of scope
 
