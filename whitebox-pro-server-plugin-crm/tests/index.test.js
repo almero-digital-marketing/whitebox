@@ -2,74 +2,38 @@ import { describe, it, expect, vi } from 'vitest'
 import express from 'express'
 import { crm } from '../src/index.js'
 
+// A minimal ctx — CRM now depends on ctx.facts (structured state) + ctx.awareness
+// (notes). state.init wires onto ctx.facts; the context provider reads it back.
+function makeCtx({ current = {} } = {}) {
+  const ctx = {
+    passports: { findByIdentity: vi.fn() },
+    facts: { record: vi.fn(), current: vi.fn(async () => current) },
+    awareness: { record: vi.fn() },
+    context: undefined,
+    logger: { child() { return this }, info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  }
+  return ctx
+}
+
 describe('crm plugin — context registration', () => {
-  it('registers a "crm" provider that returns records for a passport', async () => {
-    const sampleRows = [
-      { id: 1, source: 'booking', kind: 'reservation', external_id: 'r1', status: 'confirmed',
-        starts_at: new Date('2026-06-12T14:00:00Z'), data: { room: 'suite' },
-        passport_id: 'p-1', created_at: new Date(), updated_at: new Date() },
-    ]
-
-    // Minimal stand-ins — the plugin shouldn't reach into anything we don't provide
+  it('registers a "crm" provider that returns the passport\'s current facts as key/value rows', async () => {
     const providers = new Map()
-    const context = {
-      register: vi.fn((name, fn) => providers.set(name, fn)),
-    }
-
-    // db is only touched if our provider is invoked; stub returns sampleRows.
-    // The plugin calls records.init({ db }), so the records data layer runs
-    // against this stub. Simpler than mocking the module: spy through db().
-    // Knex chain: where().orderBy().limit().offset() — also supports andWhere
-    function chain(result) {
-      const c = {
-        orderBy() { return c },
-        limit() { return c },
-        offset() { return Promise.resolve(result) },
-        andWhere() { return c },
-      }
-      return c
-    }
-    const where = vi.fn(() => chain(sampleRows))
-    const db = vi.fn(() => ({ where }))
-
-    const ctx = {
-      db,
-      passports: { findByIdentity: vi.fn() },
-      awareness: { record: vi.fn() },
-      context,
-      logger: { child: () => ctx.logger, info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    }
+    const ctx = makeCtx({ current: { subscription: 'active', plan_tier: 'pro' } })
+    ctx.context = { register: vi.fn((name, fn) => providers.set(name, fn)) }
 
     await crm({ auth: { secret: 's' } }).register(express(), ctx)
 
-    expect(context.register).toHaveBeenCalledWith('crm', expect.any(Function))
-    const provider = providers.get('crm')
-    const result = await provider('p-1', { limit: 10 })
-
-    // Provider returns a compact shape — no id/created_at/passport_id fields
-    expect(result).toEqual([{
-      source: 'booking',
-      kind: 'reservation',
-      external_id: 'r1',
-      status: 'confirmed',
-      starts_at: sampleRows[0].starts_at,
-      data: { room: 'suite' },
-    }])
+    expect(ctx.context.register).toHaveBeenCalledWith('crm', expect.any(Function))
+    const result = await providers.get('crm')('p-1')
+    expect(result).toEqual([
+      { key: 'subscription', value: 'active' },
+      { key: 'plan_tier', value: 'pro' },
+    ])
+    expect(ctx.facts.current).toHaveBeenCalledWith('p-1')
   })
 
   it('does not throw when context is absent (plugin works without registry)', async () => {
-    const ctx = {
-      db: vi.fn(() => ({
-        where: () => {
-          const c = { orderBy() { return c }, limit() { return c }, offset() { return Promise.resolve([]) }, andWhere() { return c } }
-          return c
-        },
-      })),
-      passports: { findByIdentity: vi.fn() },
-      awareness: { record: vi.fn() },
-      // context: undefined  ← intentionally missing
-      logger: { child() { return this }, info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    }
+    const ctx = makeCtx()
     await expect(crm({ auth: { secret: 's' } }).register(express(), ctx)).resolves.not.toThrow()
   })
 })

@@ -2,7 +2,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 import createAuth from 'whitebox-pro-server/auth'
-import * as records from './records.js'
+import * as state from './state.js'
 import * as ingest from './ingest.js'
 
 import { mountRoutes, observeSchema } from './routes.js'
@@ -11,6 +11,10 @@ import { registerMcp } from './mcp.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Factory: crm({ auth: { secret: process.env.WB_CRM_TOKEN } }) in whitebox.config.js.
+//
+// CRM is now a thin adapter: structured records land in the core *facts* memory
+// (queryable by the selector as `filter.fact`), free-text notes land in awareness.
+// It owns no store of its own — the migration only drops its retired records table.
 export function crm(options = {}) {
   return {
     name: 'crm',
@@ -23,20 +27,20 @@ export function crm(options = {}) {
     },
 
     async register(app, ctx) {
-      const { db, connect, passports, awareness, context, logger: rootLogger } = ctx
+      const { connect, passports, facts, awareness, context, logger: rootLogger } = ctx
       const logger = rootLogger.child({ component: 'crm' })
       const crmConfig = options
 
       const requireAuth = createAuth({ secret: crmConfig.auth?.secret, logger })
 
       // Singleton modules: capture deps once, in dependency order. ingest reaches
-      // records directly via `import * as records`, so it only needs the
-      // non-module values here.
-      records.init({ db })
+      // state directly via `import * as state`; state writes structured records
+      // into core facts. Only non-module values come through init.
+      state.init({ facts, logger })
       ingest.init({ passports, awareness, logger })
 
-      mountRoutes(app, { requireAuth, records, ingest, logger })
-      registerMcp(ctx, { records, ingest })
+      mountRoutes(app, { requireAuth, state, ingest, logger })
+      registerMcp(ctx, { state, ingest })
 
       // Client-reported observations arrive over the socket (whitebox-pro-client-plugin-crm).
       // Identity is the connection's passport — the trusted, handshake-bound one —
@@ -51,24 +55,18 @@ export function crm(options = {}) {
           .catch(err => logger.warn({ err }, 'crm.observe ingest failed'))
       })
 
-      // CRM records flow into analytics' `/ask` via the generic context registry.
-      // Facts already live in awareness so they're surfaced through awareness.recall;
-      // no separate registration needed for them.
-      context?.register?.('crm', async (passportId, { limit = 20, offset = 0 } = {}) => {
-        const rows = await records.listForPassport(passportId, { limit, offset })
-        return rows.map(r => ({
-          source:      r.source,
-          kind:        r.kind,
-          external_id: r.external_id,
-          status:      r.status,
-          starts_at:   r.starts_at,
-          data:        r.data,
-        }))
+      // Structured state flows into analytics' `/ask` via the generic context
+      // registry. It now lives in core facts, so this surfaces the passport's
+      // current facts ({ key: value }) as that customer's structured context.
+      // (Free-text notes already live in awareness and surface via recall.)
+      context?.register?.('crm', async (passportId) => {
+        const current = await state.current(passportId)
+        return Object.entries(current).map(([key, value]) => ({ key, value }))
       })
 
-      logger.info('CRM plugin ready')
+      logger.info('CRM plugin ready (facts adapter)')
 
-      return { records, ingest }
+      return { state, ingest }
     },
   }
 }

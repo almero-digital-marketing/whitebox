@@ -1,39 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ingest now imports the real records module directly (`import * as records`).
-// Mock it so each test can swap in a fresh stub whose upsert/find calls the
-// existing assertions still inspect. The mock's exported functions delegate to
-// whatever stub the test installed via setRecords(makeRecords()).
-let currentRecords
-vi.mock('../src/records.js', () => ({
+// ingest imports the real state module directly (`import * as state`). Mock it so
+// each test can swap in a fresh stub whose record() the assertions inspect. The
+// mock's exported functions delegate to whatever stub setState() installed.
+let currentState
+vi.mock('../src/state.js', () => ({
   init: vi.fn(),
-  upsert: vi.fn((...args) => currentRecords.upsert(...args)),
-  find: vi.fn((...args) => currentRecords.find(...args)),
-  listForPassport: vi.fn((...args) => currentRecords.listForPassport(...args)),
+  record: vi.fn((...args) => currentState.record(...args)),
+  current: vi.fn((...args) => currentState.current(...args)),
 }))
 
 import * as ingest from '../src/ingest.js'
-import * as records from '../src/records.js'
+import * as state from '../src/state.js'
 
-function makeRecords() {
+function makeState() {
   const store = []
   return {
     _store: store,
-    upsert: vi.fn(async (r) => {
-      const idx = store.findIndex(x => x.source === r.source && x.kind === r.kind && x.external_id === r.external_id)
-      const row = { id: idx >= 0 ? store[idx].id : store.length + 1, updated_at: new Date(), ...r }
-      if (idx >= 0) store[idx] = row
-      else store.push(row)
-      return row
-    }),
-    find: vi.fn(async ({ source, kind, external_id }) =>
-      store.find(r => r.source === source && r.kind === kind && r.external_id === String(external_id)) ?? null),
+    record: vi.fn(async (r) => { store.push(r); return { ...r, written: 1 } }),
+    current: vi.fn(async () => ({})),
   }
 }
 
-// Install a records stub as the active delegate and re-init the ingest
-// singleton with fresh passports/awareness. Returns the ingest namespace so
-// existing `ingest.ingestRecords()` call sites are unchanged.
 function setup({ passports, awareness } = {}) {
   passports ??= makePassports()
   awareness ??= makeAwareness()
@@ -41,8 +29,8 @@ function setup({ passports, awareness } = {}) {
   return ingest
 }
 
-function setRecords(stub) {
-  currentRecords = stub
+function setState(stub) {
+  currentState = stub
   return stub
 }
 
@@ -58,11 +46,11 @@ function makeAwareness() {
   return { record: vi.fn(async () => ({ id: 1 })) }
 }
 
-const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  setRecords(makeRecords())
+  setState(makeState())
 })
 
 describe('crm.ingest — shared identity gate', () => {
@@ -120,7 +108,6 @@ describe('crm.ingest — shared identity gate', () => {
     expect(recResult.passport_created).toBe(true)
     expect(recResult.passport_id).toBe('p-new')
 
-    // Second call with the same email reuses the (now-existing) passport.
     passports.byIdentity = { 'email|fresh@example.com': { id: 'p-new' } }
     passports.findByIdentity.mockImplementation(async (t, v) =>
       t === 'email' && v === 'fresh@example.com' ? { id: 'p-new' } : null)
@@ -148,9 +135,9 @@ describe('crm.ingest — shared identity gate', () => {
   })
 })
 
-describe('crm.ingest — ingestRecords', () => {
-  it('upserts records with passport linkage and returns counters', async () => {
-    const records = setRecords(makeRecords())
+describe('crm.ingest — ingestRecords (→ core facts via state)', () => {
+  it('records each record\'s structured state with passport linkage and returns counters', async () => {
+    const state = setState(makeState())
     const passports = makePassports({ byIdentity: { 'email|alice@example.com': { id: 'p-1' } } })
     const ingest = setup({ passports })
 
@@ -163,16 +150,19 @@ describe('crm.ingest — ingestRecords', () => {
       ],
     })
 
-    expect(records.upsert).toHaveBeenCalledTimes(2)
+    expect(state.record).toHaveBeenCalledTimes(2)
+    expect(state.record).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'booking', kind: 'reservation', external_id: 'r1', passport_id: 'p-1', status: 'confirmed', data: { room: 12 },
+    }))
     expect(result.records).toEqual({ accepted: 2, dropped: 0 })
     expect(result.passport_id).toBe('p-1')
   })
 
-  it('counts a failed upsert as dropped without aborting the batch', async () => {
-    const records = setRecords(makeRecords())
-    records.upsert
-      .mockImplementationOnce(async () => { throw new Error('db down') })
-      .mockImplementationOnce(async (r) => ({ id: 1, ...r }))
+  it('counts a failed state write as dropped without aborting the batch', async () => {
+    const state = setState(makeState())
+    state.record
+      .mockImplementationOnce(async () => { throw new Error('facts down') })
+      .mockImplementationOnce(async (r) => ({ ...r, written: 1 }))
     const passports = makePassports({ byIdentity: { 'email|a@b.com': { id: 'p-1' } } })
     const ingest = setup({ passports })
 
@@ -189,8 +179,8 @@ describe('crm.ingest — ingestRecords', () => {
   })
 })
 
-describe('crm.ingest — ingestFacts', () => {
-  it('records a customer-level fact (no ref) into awareness', async () => {
+describe('crm.ingest — ingestFacts (→ awareness notes)', () => {
+  it('records a customer-level note (no ref) into awareness', async () => {
     const passports = makePassports({ byIdentity: { 'email|bob@example.com': { id: 'p-3' } } })
     const awareness = makeAwareness()
     const ingest = setup({ passports, awareness })
@@ -212,13 +202,7 @@ describe('crm.ingest — ingestFacts', () => {
     }))
   })
 
-  it('resolves ref to record_id via DB lookup when the record exists', async () => {
-    const records = setRecords(makeRecords())
-    // Pre-seed: the referenced record was upserted in an earlier request.
-    records._store.push({
-      id: 42, source: 'hubspot', kind: 'deal', external_id: 'd-42',
-      passport_id: 'p-1', data: {},
-    })
+  it('a ref carries the external identity + entity (joins to the state facts)', async () => {
     const passports = makePassports({ byIdentity: { 'email|c@d.com': { id: 'p-1' } } })
     const awareness = makeAwareness()
     const ingest = setup({ passports, awareness })
@@ -233,29 +217,9 @@ describe('crm.ingest — ingestFacts', () => {
     const call = awareness.record.mock.calls[0][0]
     expect(call.meta).toEqual({
       kind: 'note',
-      ref: { kind: 'deal', external_id: 'd-42' },
-      record_id: 42,
+      ref: { kind: 'deal', external_id: 'd-42', entity: 'deal:d-42' },
     })
-    expect(records.find).toHaveBeenCalledWith({
-      source: 'hubspot', kind: 'deal', external_id: 'd-42',
-    })
-  })
-
-  it('omits record_id but keeps ref when the referenced record is not (yet) stored', async () => {
-    const passports = makePassports({ byIdentity: { 'email|c@d.com': { id: 'p-1' } } })
-    const awareness = makeAwareness()
-    const ingest = setup({ passports, awareness })
-
-    await ingest.ingestFacts({
-      source: 'hubspot',
-      customer: { email: 'c@d.com' },
-      facts: [{ id: 'n-7', kind: 'note', body: 'Status changed',
-               ref: { kind: 'deal', external_id: 'd-42' } }],
-    })
-
-    const call = awareness.record.mock.calls[0][0]
-    expect(call.meta.ref).toEqual({ kind: 'deal', external_id: 'd-42' })
-    expect(call.meta.record_id).toBeUndefined()
+    expect(call.meta.record_id).toBeUndefined()   // record_id is retired
   })
 
   it('content_id is stable across re-pushes and independent of ref', async () => {
@@ -263,16 +227,13 @@ describe('crm.ingest — ingestFacts', () => {
     const awareness = makeAwareness()
     const ingest = setup({ passports, awareness })
 
-    // Same fact, referenced against two different records — content_id stays put.
     await ingest.ingestFacts({
       source: 'hubspot', customer: { email: 'c@d.com' },
-      facts: [{ id: 'n-7', kind: 'note', body: 'Same body',
-               ref: { kind: 'deal', external_id: 'A' } }],
+      facts: [{ id: 'n-7', kind: 'note', body: 'Same body', ref: { kind: 'deal', external_id: 'A' } }],
     })
     await ingest.ingestFacts({
       source: 'hubspot', customer: { email: 'c@d.com' },
-      facts: [{ id: 'n-7', kind: 'note', body: 'Same body',
-               ref: { kind: 'deal', external_id: 'B' } }],
+      facts: [{ id: 'n-7', kind: 'note', body: 'Same body', ref: { kind: 'deal', external_id: 'B' } }],
     })
 
     expect(awareness.record.mock.calls[0][0].content_id).toBe('hubspot:fact:note:n-7')
@@ -288,7 +249,7 @@ describe('crm.ingest — ingestFacts', () => {
       source: 'x', customer: { email: 'c@d.com' },
       facts: [
         { id: '1', kind: 'note', body: 'good' },
-        { id: '2', kind: 'note', body: '' },          // would already be 400 at Zod, this is a safety net
+        { id: '2', kind: 'note', body: '' },
       ],
     })
 

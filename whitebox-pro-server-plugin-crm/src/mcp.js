@@ -1,10 +1,9 @@
 // MCP capability registrations for the crm plugin.
 //
-// Action tools: upsert a record, add a fact (CRM-side write paths that the
-// LLM operator might want to trigger — e.g. "log a note that the customer
-// called and wants X"). Read tools: list / get individual records. Facts
-// flow into awareness and are reachable via the analytics MCP tools, so
-// they're not exposed separately here.
+// Action tools: upsert a record (→ core facts), add a note (→ awareness). Read
+// tool: a passport's current structured state (read back from facts). Notes flow
+// into awareness and are reachable via the analytics MCP tools; structured state
+// is core facts, queryable via the core whitebox.query tool.
 
 import { z } from 'zod'
 
@@ -24,7 +23,7 @@ function dropReason(result) {
   return null
 }
 
-export function registerMcp(ctx, { records, ingest }) {
+export function registerMcp(ctx, { state, ingest }) {
   if (!ctx.mcp) return
 
   ctx.mcp.tool({
@@ -89,57 +88,14 @@ export function registerMcp(ctx, { records, ingest }) {
   })
 
   ctx.mcp.tool({
-    name: 'crm.list_records',
-    description: 'List CRM records for a passport, most-recent-first by starts_at. Filter by source or kind.',
+    name: 'crm.get_state',
+    description: 'Get a customer\'s current structured state — the key→value facts CRM records have written for this passport (e.g. { subscription: "active", plan_tier: "pro" }). For history, transitions or cross-customer queries, use the core whitebox.query tool (these are core facts).',
     inputSchema: {
       passport_id: z.string().uuid(),
-      source:      z.string().max(64).optional(),
-      kind:        z.string().max(64).optional(),
-      limit:       z.number().int().positive().max(500).optional(),
     },
-    handler: async ({ passport_id, source, kind, limit = 100 }) => {
-      const rows = await records.listForPassport(passport_id, { source, kind, limit })
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(rows.map(r => ({
-            source: r.source, kind: r.kind, external_id: r.external_id,
-            status: r.status, starts_at: r.starts_at, data: r.data,
-          })), null, 2),
-        }],
-      }
+    handler: async ({ passport_id }) => {
+      const current = await state.current(passport_id)
+      return { content: [{ type: 'text', text: JSON.stringify(current, null, 2) }] }
     },
-  })
-
-  ctx.mcp.tool({
-    name: 'crm.get_record',
-    description: 'Fetch one CRM record by its (source, kind, external_id) identity.',
-    inputSchema: {
-      source:      z.string().min(1).max(64),
-      kind:        z.string().min(1).max(64),
-      external_id: z.union([z.string(), z.number()]),
-    },
-    handler: async ({ source, kind, external_id }) => {
-      const row = await records.find({ source, kind, external_id: String(external_id) })
-      if (!row) {
-        return { isError: true, content: [{ type: 'text', text: `No record ${source}/${kind}/${external_id}` }] }
-      }
-      return { content: [{ type: 'text', text: JSON.stringify(row, null, 2) }] }
-    },
-  })
-
-  ctx.mcp.resource({
-    name: 'crm-records',
-    uri: 'whitebox://crm/records',
-    description: 'Use the crm.list_records tool to query records by passport. This resource is an empty placeholder — records are passport-scoped and don\'t have a single list view.',
-    mimeType: 'application/json',
-    handler: async (uri) => ({
-      contents: [{
-        uri: String(uri), mimeType: 'application/json',
-        text: JSON.stringify({
-          note: 'CRM records are passport-scoped. Use the crm.list_records tool with a passport_id.',
-        }, null, 2),
-      }],
-    }),
   })
 }

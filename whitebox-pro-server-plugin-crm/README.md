@@ -11,11 +11,11 @@ The plugin is intentionally small. It does not model business workflows, send no
 ## What you get
 
 - **One pane of glass for customer context.** A single `/analytics/ask` call answers both *"have we discussed pricing?"* (semantic recall from emails/calls/web) and *"are they an active customer?"* (structured CRM state) in one grounded LLM response.
-- **Two endpoints, two concepts.** `POST /crm/records` upserts *structured state* (a reservation, a subscription, a deal). `POST /crm/facts` ingests *things we know* about the customer (a staff note, a tag, a call summary, an allergy). Triggers in your CRM map 1:1 — status-change webhooks call `/records`, note-added webhooks call `/facts`. No re-merging.
+- **Two endpoints, two concepts.** `POST /crm/records` writes *structured state* (a reservation, a subscription, a deal) into core **facts**. `POST /crm/facts` ingests *free-text things we know* about the customer (a staff note, a tag, a call summary, an allergy) into **awareness**. Triggers in your CRM map 1:1 — status-change webhooks call `/records`, note-added webhooks call `/facts`. No re-merging.
 - **Notes, tags, and free-text fields become searchable memory.** Anything you push to `/crm/facts` lands in the semantic store (`channel: 'crm'`, `direction: 'observation'`) with a stable `content_id`, so re-pushes dedupe and `/analytics/ask` can cite them by timestamp.
 - **Zero adapter maintenance on the whitebox side.** No polling, no OAuth flows, no per-vendor SDKs. Third-party APIs change constantly — that complexity lives in *your* CRM glue, not in whitebox.
 - **Idempotent ingestion.** Upsert on `(source, kind, external_id)` means re-sending the same payload is safe. Nightly reconciliation is just "replay the last 48h" — no special "sync" mode.
-- **GDPR-safe.** `passport_id` is `ON DELETE SET NULL`. Forgetting a passport removes the awareness footprint but keeps the CRM-owned row intact (the external system still owns it).
+- **GDPR-safe.** State lives in core facts (FK to the passport, cascade) and notes in awareness. Forgetting a passport removes both; the external system still owns the source data and can re-ingest.
 - **Identity-first ingestion.** Records arrive attached to identifying info (email / phone / external_id). If a passport with any of those identities already exists, the record links to it and any new identities backfill onto it. If none match, a new passport is created from the CRM-provided identities — the CRM is allowed to be the first system to meet a customer. Only payloads with **no usable identity at all** are dropped.
 
 ## How to integrate
@@ -79,7 +79,7 @@ await fetch('https://wb.example.com/crm/facts', {
 })
 ```
 
-`ref` is optional. Omit it for customer-level facts (tags, lifetime preferences, allergies). When provided, awareness `meta` carries both `ref` and a resolved `record_id` (if the referenced record exists in `whitebox_crm_records` already).
+`ref` is optional. Omit it for customer-level notes (tags, lifetime preferences, allergies). When provided, awareness `meta` carries the `ref` (kind + external_id) plus the resolved `entity` (`kind:external_id`) — the same entity the record's state facts carry, so a note and the state it refers to join on it.
 
 Both routes return the same response shape:
 
@@ -92,29 +92,32 @@ Both routes return the same response shape:
 
 Two design rules keep it small:
 
-- **The CRM is the source of truth.** Always send the full record / fact; whitebox replaces on upsert. No diff protocol.
-- **Send on every change.** A nightly replay of the last 48h is the recommended retry strategy because the upserts on both routes are idempotent.
+- **The CRM is the source of truth.** Always send the full record / note; the current view is whatever you last sent. No diff protocol.
+- **Send on every change.** A nightly replay of the last 48h is a safe retry strategy: records append (current = latest) and notes dedupe on `content_id`, so re-sending is idempotent for state and notes alike.
 
 ### 4. Read it back
 
 Either via `/analytics/ask` (which pulls structured CRM context automatically alongside semantic evidence), or directly:
 
 ```
-GET /crm/records/:passport_id?source=booking&kind=reservation&limit=50&offset=0
-GET /analytics/context/:passport_id?provider=crm&limit=20&offset=0
+GET /crm/records/:passport_id      → { data: { <key>: <value>, … } }  (current state, from facts)
+GET /analytics/context/:passport_id?provider=crm
 ```
+
+For history, transitions, time-travel, or cross-customer queries, use the core query surface (`POST /query`, `POST /ask`) — structured state is core facts.
 
 ## Design in one breath
 
 - **Push only.** Whitebox never polls. The external system sends every change as a webhook. Third-party APIs change; maintaining adapters for them is somebody else's problem.
-- **Upsert by external identity.** `(source, kind, external_id)` is the unique key. Re-sending the same payload replaces `status`, `starts_at`, `data` and bumps `updated_at`. No history, no event log — the CRM is already the source of truth.
+- **A thin adapter, no store of its own.** Structured state lands in the core **facts** memory (`ctx.facts`); the plugin owns no table. A record's `status` becomes a fact keyed by `kind`, each scalar in `data` becomes its own fact, `starts_at` is the fact's `observed_at`, and `(source, external_id)` are the fact's `source` + `entity`. Facts are append-only, so a status change just appends a new row — the current value is the latest and the history powers temporal queries.
+- **Queryable by the selector.** Because state is facts, the core query engine filters on it directly: `{ fact: { subscription: { eq: "active" } } }`, `{ fact: { plan_tier: { eq: "pro" } } }`, even transitions (`{ fact: { subscription: { transition: { to: "cancelled" } } } }`). No CRM-specific query path.
 - **Identity drives passport resolution.** The CRM must send at least one of `email`, `phone`, or `external_id` in `customer`. The plugin:
   1. Looks for an existing passport that already has any of those identities.
   2. If found, reuses it and **backfills** any identities the existing passport was missing.
   3. If not found, **creates a new passport** and links every identity the CRM provided.
   4. If the payload has no usable identity at all → drops with `202 reason:"no_identity"`.
-- **Records and facts on separate routes.** Records carry current state (`POST /crm/records`). Facts carry things we know about the customer (`POST /crm/facts`). A fact may reference a record via `ref: { kind, external_id }`, or stand alone for customer-level observations (tags, allergies, lifetime preferences). Each fact becomes an awareness exposure (`channel:'crm'`, `direction:'observation'`) with `content_id = "${source}:fact:${kind}:${id}"` — stable across re-pushes and independent of which record it's attached to.
-- **GDPR-safe.** `passport_id` is `ON DELETE SET NULL`. A `DELETE /analytics/passport/:id` removes the awareness footprint but leaves the CRM-owned row in place — the external system still owns it.
+- **Records and notes on separate routes.** Records carry current state (`POST /crm/records` → facts). Notes carry free-text things we know about the customer (`POST /crm/facts` → awareness). A note may reference a record via `ref: { kind, external_id }` — the ref carries the external identity + `entity` (`kind:external_id`), so a note and the state it refers to join on that entity. Each note becomes an awareness exposure (`channel:'crm'`, `direction:'observation'`) with `content_id = "${source}:fact:${kind}:${id}"` — stable across re-pushes.
+- **GDPR-safe.** Facts FK to the passport with cascade; forgetting a passport removes its facts and awareness footprint. The external system still owns the source data and can re-ingest.
 
 ## Role
 
@@ -130,15 +133,15 @@ GET /analytics/context/:passport_id?provider=crm&limit=20&offset=0
    │   records: [...] }            facts:   [...] }
    ▼                              ▼
 ┌──────────────────────────────────────────────┐
-│ crm plugin                                   │
+│ crm plugin (thin adapter, no store)          │
 │  ─ shared bearer auth                        │
 │  ─ shared resolvePassport (identity gate)    │
 │  ─ ingestRecords  │  ingestFacts             │
 └──────┬────────────┴──────┬───────────────────┘
        │                   │
        ▼                   ▼
-whitebox_crm_records   core/awareness
-(structured state)     (exposures + chunks)
+   core facts          core/awareness
+(structured state)     (notes: exposures + chunks)
 ```
 
 ## File layout
@@ -146,29 +149,29 @@ whitebox_crm_records   core/awareness
 ```
 src/plugins/crm/
 ├── migrations/
-│   └── 001_create_records.js
-├── records.js     - upsert / find / list data layer
-├── ingest.js      - identity resolution + record + awareness writes
-├── index.js       - HTTP routes, Zod, auth
+│   ├── 001_create_records.js   - (retired)
+│   └── 002_drop_records.js     - drops the old table; state is core facts now
+├── state.js      - structured-state adapter over ctx.facts
+├── ingest.js     - identity resolution + state + awareness writes
+├── routes.js     - HTTP routes, Zod
+├── mcp.js        - MCP tools
+├── index.js      - wiring, auth, context registration
 └── README.md
 ```
 
-## Table: `whitebox_crm_records`
+## Structured state → core facts
 
-| column        | type      | notes                                              |
-|---------------|-----------|----------------------------------------------------|
-| id            | serial PK |                                                    |
-| passport_id   | uuid      | FK → passports, **SET NULL** on passport delete    |
-| source        | string    | `'booking'`, `'stripe'`, `'hubspot'`, …            |
-| kind          | string    | `'reservation'`, `'subscription'`, `'deal'`, …     |
-| external_id   | string    | CRM-side row id                                    |
-| status        | string?   | free-form CRM status                               |
-| starts_at     | timestamp?| event time (check-in, due date, …)                 |
-| data          | jsonb     | full CRM payload, shape is CRM-specific            |
-| created_at    | timestamp |                                                    |
-| updated_at    | timestamp | bumped on every upsert                             |
+CRM owns no table. Each record maps onto the core **facts** memory:
 
-Unique: `(source, kind, external_id)`. Indexes on `passport_id`, `(source, kind)`, `starts_at`.
+| record field           | becomes                                                        |
+|------------------------|---------------------------------------------------------------|
+| `status`               | a fact `key = kind`, `value = status` (the primary signal)    |
+| each scalar in `data`  | a fact `key = <field>`, `value = <scalar>` (individually queryable) |
+| `starts_at`            | the fact's `observed_at` (the event time → funnel `matched_at`) |
+| `source`               | the fact's `source`                                            |
+| `(kind, external_id)`  | the fact's `entity` (`kind:external_id`)                       |
+
+Facts are append-only, so a status change appends a new row — the current value is the latest, and the history powers `asOf` time-travel and temporal operators (`transition`, `changed`). Non-scalar `data` fields are skipped (not value-queryable); a record with neither status nor scalar data records a bare presence fact (`key = kind`, `value = true`). Forgetting a passport cascades to its facts.
 
 ## Configuration
 
@@ -253,7 +256,7 @@ Ingest free-form things we know about the customer. Bearer-authed, JSON body.
 }
 ```
 
-The fact with `ref` is attached to the reservation (awareness `meta.record_id` is populated via DB lookup if the record exists). The one without `ref` applies at the customer level — useful for tags, allergies, lifetime preferences.
+The note with `ref` is tied to the reservation via its `entity` (`reservation:res_88421`) in awareness `meta` — the same entity the reservation's state facts carry. The one without `ref` applies at the customer level — useful for tags, allergies, lifetime preferences.
 
 **Response — happy path** (`200`)
 
@@ -278,13 +281,14 @@ The fact with `ref` is attached to the reservation (awareness `meta.record_id` i
 
 ### `GET /crm/records/:passport_id`
 
-Read records back for a known passport. Useful for admin tools.
+Read the passport's **current structured state** back — the `{ key: value }` facts CRM has written for them. A convenience read for admin tools; the full query surface (history, transitions, cross-customer) is core `POST /query`.
 
-Query params: `source`, `kind`, `limit` (default 50, max 500), `offset`. Ordered by `starts_at` desc. Returns the standard `{ data, limit, offset, has_more }` pagination envelope.
+Returns `{ data: { <key>: <value>, … } }`.
 
 ```bash
 curl -H "Authorization: Bearer $WHITEBOX_TOKEN" \
-  "https://api.example.com/crm/records/$PASSPORT_ID?source=booking&kind=reservation"
+  "https://api.example.com/crm/records/$PASSPORT_ID"
+# → { "data": { "subscription": "active", "plan_tier": "pro", "seats": 9 } }
 ```
 
 ## Identity resolution
@@ -315,9 +319,9 @@ This is permissive on purpose. The CRM is often the first system to meet a custo
 
 Why backfill matters: the same customer can be known by email in your booking system and by phone in your billing system. The first CRM push creates a passport with email; the next push from billing arrives with phone, finds the passport by phone OR creates a new one. Either way, sending both `email` and `phone` together accelerates merging — `passports.link()` handles the cross-system reconciliation under the hood.
 
-## Facts → awareness mapping
+## Notes → awareness mapping
 
-For each fact pushed to `/crm/facts` the plugin calls:
+For each note pushed to `/crm/facts` the plugin calls:
 
 ```js
 awareness.record({
@@ -331,17 +335,16 @@ awareness.record({
   text: fact.body,
   meta: {
     kind: fact.kind,                              // 'note' | 'tag' | 'call_summary' | ...
-    ref: fact.ref || undefined,                   // { kind, external_id } when attached to a record
-    record_id: <row.id of the referenced record, if it exists in whitebox_crm_records>,
+    ref: { kind, external_id, entity: `${kind}:${external_id}` },  // when attached to a record
   },
 })
 ```
 
 Three properties to notice:
 
-- **"Fact" is the right name.** These are atomic things we know about the customer — a tag, an observation, a note's contents. The LLM in `/analytics/ask` treats them as facts asserted by the source CRM (not as eternal truths). Same epistemological footing as every other awareness exposure.
-- **`content_id` is derived from the fact's own identity**, not from any record's. If the CRM re-attaches a note to a different record, `content_id` stays put — awareness still dedupes it via `content_hash`, no re-embedding.
-- **`ref` is metadata, not structure.** It travels to the LLM via awareness `meta` so `/analytics/ask` can cite *"a note on reservation res_88421 from May 20 said …"*, but the storage doesn't care whether the referenced record exists, exists in a separate push, or exists in a different source. Push facts independently from the records they reference whenever it's convenient. `record_id` is populated only when a matching row already lives in `whitebox_crm_records`; otherwise `ref` alone carries the external identity for future joins.
+- **"Note" is the right name.** These are atomic free-text things we know about the customer — a tag, an observation, a note's contents. The LLM in `/analytics/ask` treats them as asserted by the source CRM (not eternal truths). Same epistemological footing as every other awareness exposure. (Typed, value-queryable state goes to `/crm/records` → core facts instead.)
+- **`content_id` is derived from the note's own identity**, not from any record's. If the CRM re-attaches a note to a different record, `content_id` stays put — awareness still dedupes it via `content_hash`, no re-embedding.
+- **`ref` joins on `entity`, not a row id.** It travels to the LLM via awareness `meta` so `/analytics/ask` can cite *"a note on reservation res_88421 from May 20 said …"*. The `entity` (`kind:external_id`) is exactly what the record's state facts carry, so notes and state join without a stored record id. Push notes independently from the records they reference whenever it's convenient.
 
 These exposures show up in:
 - `POST /analytics/recall` — top-k semantic match scoped to the passport
@@ -621,24 +624,26 @@ tests/plugins/crm/ingest.test.js   13 tests
     - creates new passport on first sight
     - backfills identities onto an existing passport
   ingestRecords:
-    - upserts with passport linkage and returns counters
-    - counts a failed upsert as dropped without aborting the batch
+    - records each record's state into facts and returns counters
+    - counts a failed state write as dropped without aborting the batch
   ingestFacts:
-    - customer-level fact (no ref) lands in awareness
-    - resolves ref to record_id via DB lookup when the record exists
-    - omits record_id but keeps ref when record isn't (yet) stored
+    - customer-level note (no ref) lands in awareness
+    - a ref carries the external identity + entity (joins to state facts)
     - content_id is stable across re-pushes, independent of ref
-    - skips facts without a body
+    - skips notes without a body
+  state (records → facts):
+    - status → fact keyed by kind; each scalar in data → its own fact
+    - skips non-scalar data; bare presence fact when nothing else
 
 tests/plugins/crm/index.test.js     2 tests
-  - registers compact provider with context registry
+  - registers a context provider that reads back the passport's facts
   - loads without context registry
 ```
 
 ## Known gaps
 
 1. **No batch endpoint.** One HTTP request per CRM event. For very high volume (>100/s sustained), add a queue between your CRM and the webhook caller — not on the whitebox side.
-2. **No partial updates.** `data` is replaced wholesale on upsert. Senders must always push the full record, not a diff.
-3. **No delete endpoint.** A record can only be deleted via direct SQL or a future admin endpoint. `ON DELETE SET NULL` keeps the row when its passport is GDPR-forgotten.
-4. **No schema-per-source enforcement.** `data` is `jsonb` and anything passes Zod's `record(any)`. Each CRM is free-form. Add per-source validation client-side if you need it.
+2. **Append-only, latest-wins.** A status change appends a new fact (the history is the point); a `data` field that disappears keeps its last value. Send the full record each time.
+3. **One entity per kind, latest in the current view.** Multiple live entities of the same `kind` (two subscriptions) share a `key`; the current value is the most recent. The `entity` distinguishes them in history, but the selector's `filter.fact` reads the latest per key.
+4. **Non-scalar `data` is not queryable.** Object/array fields are skipped (only scalars become facts). Flatten upstream if you need to filter on them.
 5. **No webhook signing.** Bearer auth only. If you need replay protection, terminate at a proxy that verifies an HMAC header before forwarding.

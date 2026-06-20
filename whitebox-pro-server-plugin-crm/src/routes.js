@@ -1,10 +1,10 @@
-// HTTP routes for the crm plugin. Two write endpoints (records, facts) and
-// one read endpoint (records by passport). All auth-gated. Schemas live
-// here because they're only used by these routes.
+// HTTP routes for the crm plugin. Two write endpoints (records → facts, facts →
+// awareness notes), one client-observe endpoint, and one read endpoint (a
+// passport's current structured state, read back from facts). All auth-gated
+// except /observe. Schemas live here because they're only used by these routes.
 
 import express from 'express'
 import { z } from 'zod'
-import { parsePage, page } from 'whitebox-pro-server/pagination'
 
 // Customer block — shared between records and facts. At least one of
 // email / phone / external_id must resolve to an identity at ingest time,
@@ -65,7 +65,7 @@ export const observeSchema = z.object({
   observations: z.array(observationSchema).min(1),
 })
 
-export function mountRoutes(app, { requireAuth, records, ingest, logger }) {
+export function mountRoutes(app, { requireAuth, state, ingest, logger }) {
   const router = express.Router()
 
   // `reason: no_identity` means well-formed payload, intentionally dropped at
@@ -116,19 +116,15 @@ export function mountRoutes(app, { requireAuth, records, ingest, logger }) {
     }
   })
 
+  // A passport's current structured state, read back from core facts as
+  // { key: value }. (The records table is gone; this is a convenience read — the
+  // full query surface is core /query + /ask.)
   router.get('/records/:passport_id', requireAuth, async (req, res) => {
     try {
-      const { limit, offset } = parsePage(req.query, { defaultLimit: 50, maxLimit: 500 })
-      const rows = await records.listForPassport(req.params.passport_id, {
-        source: req.query.source,
-        kind:   req.query.kind,
-        limit:  limit + 1,   // one extra → has_more without a COUNT
-        offset,
-      })
-      res.json(page(rows, { limit, offset }))
+      res.json({ data: await state.current(req.params.passport_id) })
     } catch (err) {
-      logger.error({ err }, 'CRM records listing failed')
-      res.status(500).json({ error: 'CRM records listing failed' })
+      logger.error({ err }, 'CRM state read failed')
+      res.status(500).json({ error: 'CRM state read failed' })
     }
   })
 

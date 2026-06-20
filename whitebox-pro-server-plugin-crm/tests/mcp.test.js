@@ -21,24 +21,20 @@ function makeIngest({
   }
 }
 
-function makeRecords({ rows = [], single = null } = {}) {
-  return {
-    listForPassport: vi.fn(async () => rows),
-    find:            vi.fn(async () => single),
-  }
+function makeState({ current = {} } = {}) {
+  return { current: vi.fn(async () => current) }
 }
 
 describe('crm plugin — MCP registration', () => {
-  it('registers four tools and one resource', () => {
+  it('registers three tools (write record, add note, read state) and no resource', () => {
     const mcp = makeMcpStub()
-    registerMcp({ mcp }, { records: makeRecords(), ingest: makeIngest() })
+    registerMcp({ mcp }, { state: makeState(), ingest: makeIngest() })
     expect([...mcp.tools.keys()].sort()).toEqual([
       'crm.add_fact',
-      'crm.get_record',
-      'crm.list_records',
+      'crm.get_state',
       'crm.upsert_record',
     ])
-    expect([...mcp.resources.keys()]).toEqual(['crm-records'])
+    expect([...mcp.resources.keys()]).toEqual([])
   })
 
   it('upsert_record passes args through to ingestRecords and reports new vs reused passport', async () => {
@@ -46,7 +42,7 @@ describe('crm plugin — MCP registration', () => {
     const ingest = makeIngest({
       recordsResult: { passport_id: 'p-7', passport_created: true, records: { accepted: 1, dropped: 0 } },
     })
-    registerMcp({ mcp }, { records: makeRecords(), ingest })
+    registerMcp({ mcp }, { state: makeState(), ingest })
 
     const result = await mcp.tools.get('crm.upsert_record').handler({
       source: 'booking',
@@ -67,7 +63,7 @@ describe('crm plugin — MCP registration', () => {
     const ingest = makeIngest({
       recordsResult: { reason: 'no_identity', records: { accepted: 0, dropped: 1 } },
     })
-    registerMcp({ mcp }, { records: makeRecords(), ingest })
+    registerMcp({ mcp }, { state: makeState(), ingest })
 
     const result = await mcp.tools.get('crm.upsert_record').handler({
       source: 'booking', customer: {},
@@ -80,7 +76,7 @@ describe('crm plugin — MCP registration', () => {
   it('add_fact routes through ingestFacts with ref payload intact', async () => {
     const mcp = makeMcpStub()
     const ingest = makeIngest()
-    registerMcp({ mcp }, { records: makeRecords(), ingest })
+    registerMcp({ mcp }, { state: makeState(), ingest })
 
     await mcp.tools.get('crm.add_fact').handler({
       source: 'hubspot',
@@ -95,38 +91,15 @@ describe('crm plugin — MCP registration', () => {
     })
   })
 
-  it('list_records projects to the compact public shape', async () => {
+  it('get_state returns the passport\'s current facts', async () => {
     const mcp = makeMcpStub()
-    const rows = [
-      { id: 1, source: 'booking', kind: 'reservation', external_id: 'r1',
-        status: 'confirmed', starts_at: new Date('2026-06-12'),
-        data: { room: 'suite' }, passport_id: 'p-1', updated_at: new Date() },
-    ]
-    registerMcp({ mcp }, { records: makeRecords({ rows }), ingest: makeIngest() })
+    registerMcp({ mcp }, { state: makeState({ current: { subscription: 'active', plan_tier: 'pro' } }), ingest: makeIngest() })
 
-    const result = await mcp.tools.get('crm.list_records').handler({ passport_id: 'p-1' })
-    const items = JSON.parse(result.content[0].text)
-    expect(items[0]).toEqual({
-      source: 'booking', kind: 'reservation', external_id: 'r1',
-      status: 'confirmed', starts_at: rows[0].starts_at.toISOString(),
-      data: { room: 'suite' },
-    })
-    // id, passport_id, updated_at NOT leaked
-    expect(items[0]).not.toHaveProperty('id')
-    expect(items[0]).not.toHaveProperty('passport_id')
-  })
-
-  it('get_record returns isError when the row is missing', async () => {
-    const mcp = makeMcpStub()
-    registerMcp({ mcp }, { records: makeRecords({ single: null }), ingest: makeIngest() })
-    const result = await mcp.tools.get('crm.get_record').handler({
-      source: 'booking', kind: 'reservation', external_id: 'nope',
-    })
-    expect(result.isError).toBe(true)
-    expect(result.content[0].text).toMatch(/No record booking\/reservation\/nope/)
+    const result = await mcp.tools.get('crm.get_state').handler({ passport_id: 'p-1' })
+    expect(JSON.parse(result.content[0].text)).toEqual({ subscription: 'active', plan_tier: 'pro' })
   })
 
   it('is a no-op when ctx.mcp is undefined', () => {
-    expect(() => registerMcp({}, { records: makeRecords(), ingest: makeIngest() })).not.toThrow()
+    expect(() => registerMcp({}, { state: makeState(), ingest: makeIngest() })).not.toThrow()
   })
 })

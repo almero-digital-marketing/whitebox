@@ -1,11 +1,11 @@
 // CRM ingest. Two independent pipelines, one shared identity gate.
 //
 //   ingestRecords({ source, customer, records[] })
-//     → upserts (source, kind, external_id) into whitebox_crm_records
+//     → writes each record's structured state into core facts (via state.js)
 //     → returns { passport_id, passport_created, records: { accepted, dropped } }
 //
 //   ingestFacts({ source, customer, facts[] })
-//     → feeds each fact to awareness as channel='crm', direction='observation'
+//     → feeds each free-text note to awareness as channel='crm', direction='observation'
 //       with stable content_id = ${source}:fact:${kind}:${id}
 //     → returns { passport_id, passport_created, facts:   { accepted, dropped } }
 //
@@ -24,7 +24,7 @@
 
 import { parsePhoneNumber } from 'libphonenumber-js'
 
-import * as records from './records.js'
+import * as state from './state.js'
 
 function normalizePhone(raw, defaultCountry = 'US') {
   try {
@@ -44,9 +44,9 @@ function buildClaims({ source, email, phone, country, external_id }) {
   return claims
 }
 
-// Dependencies captured once via init() — module-level singletons. `records`
-// is another converted module, imported directly above; only non-module
-// values (passports, awareness, logger) come through init.
+// Dependencies captured once via init() — module-level singletons. `state` (the
+// facts adapter) is imported directly above and inits itself in index.js; only
+// non-module values (passports, awareness, logger) come through init.
 let passports, awareness, logger
 
 export function init(deps) {
@@ -90,7 +90,7 @@ export async function ingestRecords({ source, customer, records: incoming = [] }
   let accepted = 0
   for (const r of incoming) {
     try {
-      await records.upsert({
+      await state.record({
         source,
         kind: r.kind,
         external_id: String(r.external_id),
@@ -102,7 +102,7 @@ export async function ingestRecords({ source, customer, records: incoming = [] }
       accepted++
     } catch (err) {
       logger.error({ err, record: { kind: r.kind, external_id: r.external_id } },
-        'Failed to upsert CRM record')
+        'Failed to record CRM state')
     }
   }
 
@@ -131,22 +131,10 @@ export async function ingestFacts({ source, customer, facts: incoming = [] }) {
     if (!f?.body) continue
     const meta = { kind: f.kind }
     if (f.ref) {
-      meta.ref = { kind: f.ref.kind, external_id: String(f.ref.external_id) }
-      // Resolve ref to a stored record id when possible. One indexed lookup
-      // against unique(source, kind, external_id). If the referenced record
-      // doesn't exist yet (fact pushed before its record), record_id is
-      // simply absent and ref still carries the external identity for
-      // future joins.
-      try {
-        const row = await records.find({
-          source,
-          kind: f.ref.kind,
-          external_id: String(f.ref.external_id),
-        })
-        if (row) meta.record_id = row.id
-      } catch (err) {
-        logger.warn({ err, ref: f.ref }, 'CRM: failed to resolve fact ref to record_id')
-      }
+      // The ref carries the external identity (kind + id). Structured state is now
+      // facts keyed by `entity = kind:external_id`, so a note and the state it
+      // refers to join on that entity — no separate record_id lookup needed.
+      meta.ref = { kind: f.ref.kind, external_id: String(f.ref.external_id), entity: `${f.ref.kind}:${f.ref.external_id}` }
     }
     try {
       await awareness.record({
