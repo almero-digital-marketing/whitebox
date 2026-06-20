@@ -15,6 +15,7 @@ const selector = {
   resolve: (...a) => { calls.push(['resolve', ...a]); return resolveImpl(...a) },
   preview: (...a) => { calls.push(['preview', ...a]); return previewImpl(...a) },
 }
+const ai = { prompt: async () => 'synthesized answer' }
 
 let base
 let server
@@ -22,7 +23,7 @@ beforeAll(async () => {
   const app = express()
   app.use(express.json())
   const requireAuth = createAuth({ secret: SECRET, logger })
-  mountRoutes(app, { requireAuth, selector, logger })
+  mountRoutes(app, { requireAuth, selector, ai, logger })
   await new Promise(r => { server = app.listen(0, r) })
   base = `http://127.0.0.1:${server.address().port}`
 })
@@ -85,5 +86,28 @@ describe('query REST surface', () => {
     resolveImpl = async () => { throw new Error('connection terminated unexpectedly') }
     const res = await post('/query', { selector: {}, projection: 'people' })
     expect(res.status).toBe(500)
+  })
+
+  it('POST /ask retrieves knowledge then synthesizes an answer', async () => {
+    calls = []
+    resolveImpl = async () => ({ evidence: [{ channel: 'web', direction: 'expression', content: 'asked about pricing', observed_at: '2026-05-01T00:00:00Z' }] })
+    const res = await post('/ask', { question: 'what about pricing?' })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toMatchObject({ answer: 'synthesized answer' })
+    expect(body.evidence).toHaveLength(1)
+    const [, sel, opts] = calls.find(c => c[0] === 'resolve')
+    expect(sel.about).toBe('what about pricing?')   // about defaults to the question
+    expect(opts.projection).toBe('knowledge')
+  })
+
+  it('POST /ask 400s without a question', async () => {
+    const res = await post('/ask', { selector: { about: 'x' } })
+    expect(res.status).toBe(400)
+  })
+
+  it('POST /ask 401s without a token', async () => {
+    const res = await post('/ask', { question: 'q' }, null)
+    expect(res.status).toBe(401)
   })
 })

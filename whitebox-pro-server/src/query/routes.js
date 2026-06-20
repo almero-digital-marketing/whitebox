@@ -1,15 +1,15 @@
 import { z } from 'zod'
+import * as ask from './ask.js'
 
 // HTTP surface for the core query engine (docs/selector.md §13). QUERY is a
 // *core* surface — apps resolve a selector directly against core, no plugin in
-// the path. Two endpoints, both auth-gated:
+// the path. Three endpoints, all auth-gated:
 //
 //   POST /query    → resolve a selector into a projection (people | knowledge)
 //   POST /preview  → cost metadata for a people query, before you run/save (§9)
+//   POST /ask      → NL answer = QUERY(knowledge) + LLM synthesis (§7) — REST only
 //
-// `/ask` (NL answer = a layer *over* QUERY(knowledge) + synthesis) is a separate
-// REST-only surface and lands in its own increment. There is deliberately no MCP
-// equivalent of /ask — see mcp.js.
+// There is deliberately no MCP equivalent of /ask — see mcp.js.
 
 // The selector grammar itself (recursive filter tree, fact/metric ops) is
 // validated by the engine, which throws precise `selector: …` errors; here we
@@ -36,6 +36,15 @@ const previewSchema = z.object({
   asOf:       z.string().optional(),
 })
 
+const askSchema = z.object({
+  question: z.string().min(1),
+  selector: selectorShape.optional(),          // optional about/filter narrowing; about defaults to the question
+  scope:    z.union([z.string(), z.array(z.string())]).optional(),
+  passport: z.string().optional(),
+  asOf:     z.string().optional(),
+  limit:    z.number().int().positive().max(100).optional(),
+})
+
 // Our deliberate, user-facing engine throws all start with "selector:" — those
 // are bad-request (the selector was syntactically ok but semantically rejected),
 // not server faults. Anything else (a DB error, say) is a real 500.
@@ -47,9 +56,10 @@ function sendEngineError(res, logger, err, where) {
   return res.status(500).json({ error: `${where} failed` })
 }
 
-// /query and /preview are siblings (§13), not nested — body parsing is the app's
-// global express.json(), same as every other core/plugin route.
-export function mountRoutes(app, { requireAuth, selector, logger, queryPath = '/query', previewPath = '/preview' }) {
+// /query, /preview and /ask are siblings (§13), not nested — body parsing is the
+// app's global express.json(), same as every other core/plugin route. `ai` is
+// only needed by /ask (synthesis); /query and /preview never touch it.
+export function mountRoutes(app, { requireAuth, selector, ai, logger, queryPath = '/query', previewPath = '/preview', askPath = '/ask' }) {
   app.post(queryPath, requireAuth, async (req, res) => {
     const parsed = querySchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
@@ -69,6 +79,16 @@ export function mountRoutes(app, { requireAuth, selector, logger, queryPath = '/
       res.json(await selector.preview(sel, opts))
     } catch (err) {
       sendEngineError(res, logger, err, 'preview')
+    }
+  })
+
+  app.post(askPath, requireAuth, async (req, res) => {
+    const parsed = askSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
+    try {
+      res.json(await ask.answer(parsed.data, { resolve: selector.resolve, ai }))
+    } catch (err) {
+      sendEngineError(res, logger, err, 'ask')
     }
   })
 }

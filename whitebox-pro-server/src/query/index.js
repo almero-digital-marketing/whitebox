@@ -14,16 +14,17 @@ import { registerMcp } from './mcp.js'
 // a missing secret can't be allowed to fail boot.
 const OPEN = (req, res, next) => next()
 
-export function register(app, { selector, mcp, config = {}, logger }) {
+export function register(app, { selector, ai, mcp, config = {}, logger }) {
   const log = logger.child({ component: 'query' })
   const secret = config.query?.auth?.secret
   if (!secret) log.warn('Query surface mounted WITHOUT auth — set config.query.auth.secret (dev only)')
   const requireAuth = secret ? createAuth({ secret, logger: log }) : OPEN
 
   mountRoutes(app, {
-    requireAuth, selector, logger: log,
+    requireAuth, selector, ai, logger: log,
     queryPath:   config.query?.path        ?? '/query',
     previewPath: config.query?.previewPath ?? '/preview',
+    askPath:     config.query?.askPath     ?? '/ask',
   })
   registerMcp({ mcp }, { selector })
 
