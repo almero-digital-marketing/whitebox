@@ -190,8 +190,8 @@ of the predicate. A `people` projection saved + given a delivery **is an audienc
 
 #### Grouping — time-series
 
-By default `resolve()` returns one result. Trend charts (the analytics dashboard,
-[analytics-dashboard.md](analytics-dashboard.md)) need a **series**, so a query
+By default `resolve()` returns one result. Trend charts (the
+[analytics concept](analytics-concept.md)) need a **series**, so a query
 takes an optional **`group: { by: "<bucket>" }`** that buckets a `metric`/`count`
 aggregate by time and returns `[{ bucket, value }]`:
 
