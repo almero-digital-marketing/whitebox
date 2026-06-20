@@ -1,4 +1,5 @@
 import * as filter from './filter.js'
+import * as metric from './metric.js'
 import { rt } from './runtime.js'
 import { aboutQuery } from './about.js'
 
@@ -41,6 +42,20 @@ export async function resolveKnowledge(selector, { scope, passport, asOf, limit 
   if (cohort) throw new Error('selector: knowledge over a filtered cohort needs `about` to rank evidence')
   const rows = await rt.awareness.sampleContent({ limit: lim })
   return { projection: 'knowledge', scope: 'base', evidence: asEvidence(rows).slice(0, lim) }
+}
+
+// group(selector, { group, scope, asOf }) → a time-series / breakdown series (§7):
+// the `metric` aggregate in selector.filter, bucketed by `group.by` (a time grain
+// — hour/day/week/month — or a dimension — channel/direction/source/content).
+// Returns [{ bucket, value }]. Unlike a people resolve this is the TOTAL aggregate,
+// optionally restricted to a caller-provided scope (e.g. a cohort's ids). This is
+// the one engine capability charts add; everything else is composition.
+export async function resolveGroup(selector, { group, scope, asOf } = {}) {
+  const m = selector?.filter?.metric
+  if (!m) throw new Error('selector: `group` requires a single `metric` filter (the aggregate to bucket)')
+  const at = asOf ? new Date(asOf) : null
+  const scopeArr = scope == null ? null : [].concat(scope)
+  return metric.group(rt.db, m, { by: group?.by, at, scope: scopeArr })
 }
 
 // A minimal ctx for evaluating a `filter` over the whole base (knowledge cohort).
