@@ -25,6 +25,7 @@ export function register(app, { selector, ai, mcp, config = {}, logger }) {
     queryPath:   config.query?.path        ?? '/query',
     previewPath: config.query?.previewPath ?? '/preview',
     askPath:     config.query?.askPath     ?? '/ask',
+    funnelPath:  config.query?.funnelPath  ?? '/funnel',
   })
   registerMcp({ mcp }, { selector })
 

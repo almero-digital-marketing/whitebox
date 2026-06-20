@@ -43,6 +43,31 @@ export function registerMcp(ctx, { selector }) {
   })
 
   ctx.mcp.tool({
+    name: 'whitebox.funnel',
+    description:
+      'Resolve an ordered, windowed FUNNEL over the people engine — { steps: [{ select, within? }], within? }. ' +
+      'Each step is a selector resolved against the prior step\'s survivors, joined on matched_at: step k keeps only ' +
+      'those whose qualifying event is AFTER step k-1\'s event and within step.within (the anchor advances). ' +
+      'Returns a drop-off report (per-step count + conversion) plus per-step cohorts ("step:N") and gap cohorts ' +
+      '("gap:N→M", split into pending = window still open vs dropped = window closed). Use it for "did A then B in ' +
+      'time" — an unordered filter can\'t tell "in time" from "ever". Windowed steps must be deterministic (fact). ' +
+      'Gap cohorts are the retargeting payoff (save them as audiences). `named` supplies reusable step selectors.',
+    inputSchema: {
+      funnel: z.object({
+        within: z.string().optional(),
+        steps: z.array(z.object({
+          select: z.union([z.string(), selectorSchema]),
+          within: z.string().optional(),
+          name: z.string().optional(),
+        })),
+      }),
+      named: z.record(z.string(), selectorSchema).optional(),
+      asOf: z.string().optional(),
+    },
+    handler: async ({ funnel, named, asOf }) => json(await selector.funnel(funnel, { named, asOf })),
+  })
+
+  ctx.mcp.tool({
     name: 'whitebox.preview',
     description:
       'Estimate the cost of a "people" selector BEFORE running or saving it as an audience. Cheap (no full judge run): ' +

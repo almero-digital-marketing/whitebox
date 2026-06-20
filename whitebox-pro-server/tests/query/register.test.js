@@ -30,7 +30,7 @@ const post = (base, path, token) =>
 describe('query surface registration', () => {
   it('registers the MCP tools', async () => {
     const { tools } = await mount({})
-    expect(Object.keys(tools).sort()).toEqual(['whitebox.preview', 'whitebox.query'])
+    expect(Object.keys(tools).sort()).toEqual(['whitebox.funnel', 'whitebox.preview', 'whitebox.query'])
   })
 
   it('mounts open (no auth) when no secret is configured — dev mode', async () => {

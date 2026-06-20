@@ -11,9 +11,11 @@ const SECRET = 'test-secret'
 let calls = []
 let resolveImpl = async (sel, opts) => ({ count: 0, passports: [], echo: { sel, opts } })
 let previewImpl = async (sel, opts) => ({ filter: { survivors: 0 }, echo: { sel, opts } })
+let funnelImpl = async (spec, opts) => ({ report: [], steps: {}, gaps: {}, echo: { spec, opts } })
 const selector = {
   resolve: (...a) => { calls.push(['resolve', ...a]); return resolveImpl(...a) },
   preview: (...a) => { calls.push(['preview', ...a]); return previewImpl(...a) },
+  funnel:  (...a) => { calls.push(['funnel', ...a]); return funnelImpl(...a) },
 }
 const ai = { prompt: async () => 'synthesized answer' }
 
@@ -109,5 +111,21 @@ describe('query REST surface', () => {
   it('POST /ask 401s without a token', async () => {
     const res = await post('/ask', { question: 'q' }, null)
     expect(res.status).toBe(401)
+  })
+
+  it('POST /funnel routes to selector.funnel and returns the report', async () => {
+    calls = []
+    funnelImpl = async () => ({ report: [{ step: 1, count: 5 }], steps: { 'step:1': ['a'] }, gaps: {} })
+    const res = await post('/funnel', { funnel: { steps: [{ select: { filter: { fact: { x: { eq: 1 } } } } }] }, asOf: '2026-05-01' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ report: [{ step: 1, count: 5 }] })
+    const [, spec, opts] = calls.find(c => c[0] === 'funnel')
+    expect(spec.steps).toHaveLength(1)
+    expect(opts).toMatchObject({ asOf: '2026-05-01' })
+  })
+
+  it('POST /funnel 400s with no steps', async () => {
+    const res = await post('/funnel', { funnel: { steps: [] } })
+    expect(res.status).toBe(400)
   })
 })

@@ -11,9 +11,18 @@ function harness(selector) {
 const parse = result => JSON.parse(result.content[0].text)
 
 describe('query MCP surface', () => {
-  it('registers exactly whitebox.query + whitebox.preview', () => {
+  it('registers whitebox.query + whitebox.preview + whitebox.funnel (no ask)', () => {
     const tools = harness({})
-    expect(Object.keys(tools).sort()).toEqual(['whitebox.preview', 'whitebox.query'])
+    expect(Object.keys(tools).sort()).toEqual(['whitebox.funnel', 'whitebox.preview', 'whitebox.query'])
+  })
+
+  it('funnel routes to selector.funnel', async () => {
+    let seen
+    const selector = { funnel: async (spec, opts) => { seen = { spec, opts }; return { report: [], steps: {}, gaps: {} } } }
+    const tools = harness(selector)
+    await tools['whitebox.funnel'].handler({ funnel: { steps: [{ select: 'a' }] }, named: { a: {} }, asOf: '2026-01-01' })
+    expect(seen.spec).toEqual({ steps: [{ select: 'a' }] })
+    expect(seen.opts).toEqual({ named: { a: {} }, asOf: '2026-01-01' })
   })
 
   it('query routes selector + opts straight to selector.resolve', async () => {

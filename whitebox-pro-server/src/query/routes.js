@@ -8,6 +8,7 @@ import * as ask from './ask.js'
 //   POST /query    → resolve a selector into a projection (people | knowledge)
 //   POST /preview  → cost metadata for a people query, before you run/save (§9)
 //   POST /ask      → NL answer = QUERY(knowledge) + LLM synthesis (§7) — REST only
+//   POST /funnel   → ordered windowed steps → drop-off report + step/gap cohorts (§14)
 //
 // There is deliberately no MCP equivalent of /ask — see mcp.js.
 
@@ -45,6 +46,19 @@ const askSchema = z.object({
   limit:    z.number().int().positive().max(100).optional(),
 })
 
+const funnelSchema = z.object({
+  funnel: z.object({
+    within: z.string().optional(),
+    steps:  z.array(z.object({
+      select: z.union([z.string(), selectorShape]),   // inline selector or a name into `named`
+      within: z.string().optional(),
+      name:   z.string().optional(),
+    })).min(1),
+  }),
+  named: z.record(z.string(), selectorShape).optional(),   // named selectors steps can reference
+  asOf:  z.string().optional(),
+})
+
 // Our deliberate, user-facing engine throws all start with "selector:" — those
 // are bad-request (the selector was syntactically ok but semantically rejected),
 // not server faults. Anything else (a DB error, say) is a real 500.
@@ -59,7 +73,7 @@ function sendEngineError(res, logger, err, where) {
 // /query, /preview and /ask are siblings (§13), not nested — body parsing is the
 // app's global express.json(), same as every other core/plugin route. `ai` is
 // only needed by /ask (synthesis); /query and /preview never touch it.
-export function mountRoutes(app, { requireAuth, selector, ai, logger, queryPath = '/query', previewPath = '/preview', askPath = '/ask' }) {
+export function mountRoutes(app, { requireAuth, selector, ai, logger, queryPath = '/query', previewPath = '/preview', askPath = '/ask', funnelPath = '/funnel' }) {
   app.post(queryPath, requireAuth, async (req, res) => {
     const parsed = querySchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
@@ -89,6 +103,17 @@ export function mountRoutes(app, { requireAuth, selector, ai, logger, queryPath 
       res.json(await ask.answer(parsed.data, { resolve: selector.resolve, ai }))
     } catch (err) {
       sendEngineError(res, logger, err, 'ask')
+    }
+  })
+
+  app.post(funnelPath, requireAuth, async (req, res) => {
+    const parsed = funnelSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() })
+    const { funnel, named, asOf } = parsed.data
+    try {
+      res.json(await selector.funnel(funnel, { named, asOf }))
+    } catch (err) {
+      sendEngineError(res, logger, err, 'funnel')
     }
   })
 }

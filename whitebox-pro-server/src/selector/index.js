@@ -1,5 +1,6 @@
 import * as filter from './filter.js'
 import * as judge from './judge.js'
+import * as funnelEngine from './funnel.js'
 
 // The selector engine — resolve a `{ about, filter, judge }` predicate into a
 // projection. See docs/selector.md.
@@ -77,6 +78,19 @@ async function resolvePeople(selector, opts) {
 function withMatchedAt(id, at) {
   return at != null ? { id, matched_at: at } : { id }
 }
+
+// funnel(spec, { asOf, named }) — ordered windowed steps over the people engine.
+// Each step is resolved as a people query scoped to the prior step's survivors,
+// joined on matched_at. Returns { report, steps, gaps } (§14). `slot()` (re-
+// exported as funnelSlot) turns a result + slot name into an audience cohort.
+export async function funnel(spec, { asOf, named } = {}) {
+  return funnelEngine.run(spec, {
+    asOf,
+    named,
+    resolveStep: (sel, { scope }) => resolvePeople(sel, { projection: 'people', scope, asOf }),
+  })
+}
+export const funnelSlot = funnelEngine.slot
 
 // knowledge — ranked evidence (chunks), never prose (prose is the /ask layer §7).
 // `about` is the *ranker* here, not a gate. Three shapes:
