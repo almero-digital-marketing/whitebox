@@ -1,4 +1,5 @@
 import * as filter from './filter.js'
+import * as judge from './judge.js'
 
 // The selector engine — resolve a `{ about, filter, judge }` predicate into a
 // projection. See docs/selector.md.
@@ -11,13 +12,15 @@ import * as filter from './filter.js'
 let db
 let logger
 let passports        // reserved: scope/merge resolution as the engine grows
-let awareness        // injected — the semantic memory (about uses population())
+let awareness        // injected — the semantic memory (about → population, judge evidence → recall)
+let ai               // injected — the LLM behind judge
 let defaults
 
 export function init(deps) {
   db = deps.db
   passports = deps.passports
   awareness = deps.awareness
+  ai = deps.ai
   logger = deps.logger.child({ component: 'selector' })
   defaults = {
     candidateSimilarity: deps.config?.selector?.candidateSimilarity ?? 0.72,
@@ -32,7 +35,6 @@ export function init(deps) {
 //               is a now-relative semantic narrow)
 export async function resolve(selector = {}, { projection = 'people', scope, asOf } = {}) {
   if (projection !== 'people') throw new Error(`selector: projection "${projection}" not implemented yet`)
-  if (selector.judge) throw new Error('selector: `judge` not implemented yet')
 
   const at = asOf ? new Date(asOf) : null
   let scopeArr = scope == null ? null : [].concat(scope)
@@ -61,8 +63,29 @@ export async function resolve(selector = {}, { projection = 'people', scope, asO
     },
   }
 
-  const ids = await filter.evaluate(selector.filter, ctx)
-  return { count: ids.length, passports: ids.map(id => ({ id })) }   // matched_at (funnels) lands later
+  const candidateIds = await filter.evaluate(selector.filter, ctx)
+
+  // `judge` — the LLM predicate, last, on the already-narrowed candidates only
+  // (cost is bounded by about + filter). Confirmed survivors carry score + why.
+  if (selector.judge) {
+    const survivors = await judge.evaluate(candidateIds, selector.judge, {
+      ai,
+      evidenceFor: id => evidenceFor(id, selector),
+    })
+    return { count: survivors.length, passports: survivors.map(s => ({ id: s.id, why: s.reason, score: s.score })) }
+  }
+
+  return { count: candidateIds.length, passports: candidateIds.map(id => ({ id })) }   // matched_at (funnels) lands later
+}
+
+// Evidence handed to the judge for one candidate: the about-recalled chunks
+// (or, with no about, recall on the criteria itself).
+async function evidenceFor(id, selector) {
+  if (!awareness?.recall) return []
+  const about = selector.about
+  const query = (typeof about === 'string' ? about : about?.query) || selector.judge.criteria
+  const hits = await awareness.recall({ passport_id: id, query, limit: 10 })
+  return Array.isArray(hits) ? hits : (hits?.data || [])
 }
 
 // `about` as a people gate: a similarity floor over the semantic memory →
