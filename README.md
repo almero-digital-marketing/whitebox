@@ -2,6 +2,8 @@
   <img src="whitebox.svg" alt="WhiteBox" width="320" />
 </p>
 
+<p align="center"><strong>The AI-native marketing data brain.</strong></p>
+
 # WhiteBox
 
 **WhiteBox is a channel backend with memory.** Record every customer touch — email, voice call, web engagement, CRM event — against one identity, embed it into a per-customer semantic store, and ask grounded questions about it in natural language.
