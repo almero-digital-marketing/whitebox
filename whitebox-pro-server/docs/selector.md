@@ -28,7 +28,7 @@ selector = { about?, filter?, judge? }            // all three optional
 
 resolve(selector, { projection, scope, asOf }) → result
 //   projection: "knowledge" | "people"             (the engine retrieves; it never writes prose)
-//   scope:      "passport"  | "base"               (people is always base)
+//   scope:      "passport" | "base" | a candidate set   (people is always base; a set feeds funnel steps)
 //   asOf:       a point in time                     (defaults to now)
 //   answer is NOT a projection — it's a layer ABOVE the engine (§7).
 ```
@@ -186,18 +186,16 @@ The query engine **retrieves data — it never writes prose.** Two projections:
 The selector is identical for both; the projection is *what you ask back*, not part
 of the predicate. A `people` projection saved + given a delivery **is an audience.**
 
-#### `matched_at` — the funnel seam (reserved)
+#### `matched_at` — the funnel anchor
 
 Each person in a `people` result carries an optional **`matched_at`** — the
-timestamp of the *qualifying event*. It's the anchor windowed/ordered funnels hang
-off (§14), so it's reserved now even though nothing reads it yet:
+timestamp of the *qualifying event*. Funnels (§14) read it to order and window
+steps:
 
 - **Defined** for deterministic steps — the threshold-crossing `metric` event, a
   `fact`'s `observed_at`.
-- **Null** for `about` / `judge` — a fuzzy or LLM match has no clean event time.
-
-Costs ~nothing to populate today; leaving it out would make funnels-later a
-breaking change to the result shape.
+- **Null** for `about` / `judge` — a fuzzy or LLM match has no clean event time, so
+  these can't anchor a windowed step (they still work as plain membership).
 
 ### `answer` is a layer on top, not a projection
 
@@ -320,43 +318,55 @@ console); **audiences stays the activation backend** (the data-egress boundary:
 networks, consent, keep-warm). A *saved selector / segment* is a thin **core**
 concept; audiences attaches delivery to it. (See [temporal facts §9](temporal-facts.md).)
 
-## 14. Funnels — the seam (mostly already covered; ordered part is v2)
+## 14. Funnels (v1)
 
-Most "funnels" are **already a single selector** — no new machinery:
+Most funnels need no special machinery — they're a single selector:
 
-- *did A, not B* → `{ all: [ A, { not: B } ] }` (set difference, via the S2 `not`).
-- *did A and B* → `{ all: [ A, B ] }` (intersection).
+- *did A, not B* → `{ all: [ A, { not: B } ] }`  (set difference, via the S2 `not`)
+- *did A and B* → `{ all: [ A, B ] }`             (intersection)
 
-The **only** thing the boolean tree can't say is **windowed / ordered** steps —
-*"started a trial, then did NOT purchase within 14 days **of starting**"* — because
-`not B` means "never B," not "not B in the window after A." That needs a per-passport
-**anchor** + a temporal join, and it's the retargeting gold ("abandoned within the
-activation window" beats "never bought, ever").
+The case that **does** need machinery is **windowed / ordered** steps — *"started a
+trial, then purchased within 14 days **of starting**"* — because `not B` means
+"never B," not "B in the window after A." A **funnel** is the ordered form:
 
-That's **v2**, but its two hooks are **reserved now** so it stays additive:
+```js
+funnel = [
+  { select: trialStarted },               // step 1
+  { select: activated,  within: "7d" },   // step 2 — within 7d of step 1's event
+  { select: purchased,  within: "14d" },  // step 3 — within 14d of step 2's event
+]
+```
 
-1. **`matched_at`** on each person in a `people` result (§7) — the anchor.
-2. **`scope: a candidate set`** on `resolve()` (alongside `passport` | `base`) — feed
-   one step's cohort as the next step's candidates. Also gives unordered cohort
-   chaining for free.
+**Resolution** chains the cohorts via a temporal join on `matched_at`: step 1
+resolves to a cohort (each with `matched_at`); step *k* resolves **scoped to step
+k-1's cohort** and keeps only those whose event is *after* the prior step's
+`matched_at` (and within `within`), advancing the anchor each step. Steps are
+**named selectors** (reusable) or inline. Windowed steps must be **deterministic**
+(event/fact) — that's what gives the `matched_at` to anchor on; `about`/`judge`
+steps work only as un-windowed membership.
 
-A funnel then = an ordered list of **named selectors** + inter-step windows;
-deterministic steps only (semantic/`judge` steps have no clean `matched_at`). The
-drop-off *report* is just a count at each step.
+**Two outputs — our two projections:**
+- **drop-off report** (`knowledge`) — count at each step + conversion rate between steps.
+- **gap cohorts** (`people`) — who's at step *k*, and who **dropped** between *k* and
+  *k+1* (did step k, not step k+1 within the window). **Each gap is a re-targetable
+  audience** — "abandoned within the activation window" — which is the whole point.
 
-### Still out of scope
+Enabling hooks, **live in v1**: `matched_at` on the `people` result (§7), and
+**`scope: a candidate set`** on `resolve()` (feed a step's cohort to the next).
 
-- **The ordered temporal-join engine itself** — reserved (hooks above), not built.
-- **Sequence patterns beyond "next step within W"** (arbitrary event regex/paths).
-- **Saved/named selectors as first-class objects** beyond audiences + funnel steps —
-  v2; for now a selector is run live (analytics), saved as an audience, or used as a
-  funnel step.
+### Out of scope
+
+- **Arbitrary sequence / path matching** beyond "next step within a window" (event
+  regex, branching paths) — funnels are linear ordered steps.
+- **Bitemporal facts** — `asOf` is valid-time by decision [D2](temporal-facts.md);
+  unchanged.
 
 ---
 
 **Build order (after [facts](temporal-facts.md)):** core `selector` schema +
-`resolve()` (the funnel) + the two projections (`knowledge` | `people`, with
-`matched_at` reserved) + `preview()` → **expose QUERY as REST `/query` `/preview`
-+ MCP**, plus the thin **`/ask`** layer (REST) → audiences-on-selector (activation
-+ delivery) → the **analytics UI** (query builder + segment manager) last. The
-facts brick goes in first.
+`resolve()` + the two projections (`knowledge` | `people`, with `matched_at`) +
+`scope: set` + `preview()` + **funnels** (ordered named-selector steps + temporal
+join + drop-off report) → **expose QUERY as REST `/query` `/preview` + MCP**, plus
+the thin **`/ask`** layer (REST) → audiences-on-selector (activation + delivery) →
+the **analytics UI** (query builder + segment manager) last. The facts brick goes
+in first.
