@@ -1,6 +1,6 @@
 import * as funnelEngine from './funnel.js'
 import { resolvePeople, preview } from './people.js'
-import { resolveKnowledge } from './knowledge.js'
+import { resolveKnowledge, resolveGroup } from './knowledge.js'
 
 // The selector engine — the public face. `resolve()` dispatches by projection;
 // the people and knowledge paths live in their own modules (people.js,
@@ -19,7 +19,11 @@ export { preview }
 //   asOf:       a point in time — applies to the deterministic filter; `about`
 //               is a now-relative semantic narrow/rank
 //   limit:      knowledge — evidence rows to return
+//   group:      { by } — return a time-series / breakdown series instead of a
+//               projection (§7); buckets selector.filter.metric by a time grain
+//               or dimension
 export async function resolve(selector = {}, opts = {}) {
+  if (opts.group) return resolveGroup(selector, opts)   // charts — a series, not a projection
   const { projection = 'people' } = opts
   if (projection === 'people') return resolvePeople(selector, opts)
   if (projection === 'knowledge') return resolveKnowledge(selector, opts)

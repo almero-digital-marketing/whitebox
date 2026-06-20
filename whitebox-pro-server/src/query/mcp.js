@@ -28,6 +28,9 @@ export function registerMcp(ctx, { selector }) {
       '"people" returns the matching cohort { count, passports }. ' +
       'about = semantic narrow (gates people / ranks knowledge); filter = a boolean tree of fact + metric clauses; ' +
       'judge = an LLM membership predicate (people only). asOf time-travels the deterministic filter. ' +
+      'Pass group: { by } to get a time-series / breakdown series [{ bucket, value }] instead — it buckets the ' +
+      'selector.filter.metric aggregate by a time grain (hour/day/week/month) or a dimension ' +
+      '(channel/direction/source/content); use it for trend + breakdown charts. ' +
       'This tool RETRIEVES — it never writes prose. To answer a natural-language question, query "knowledge" and ' +
       'synthesize the answer yourself from the returned evidence (there is no ask tool by design). ' +
       'For people, run whitebox.preview first to see the judge cost.',
@@ -38,6 +41,7 @@ export function registerMcp(ctx, { selector }) {
       passport:   z.string().optional(),
       asOf:       z.string().optional(),
       limit:      z.number().int().positive().max(1000).optional(),
+      group:      z.object({ by: z.string() }).optional(),
     },
     handler: async ({ selector: sel = {}, ...opts }) => json(await selector.resolve(sel, opts)),
   })
