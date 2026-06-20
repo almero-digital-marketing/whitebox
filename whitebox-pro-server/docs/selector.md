@@ -26,9 +26,10 @@ memories — [awareness](../src/awareness) (semantic) and [facts](temporal-facts
 selector = { about?, filter?, judge? }            // all three optional
 
 resolve(selector, { projection, scope, asOf }) → result
-//   projection: "knowledge" | "people" | "answer"
+//   projection: "knowledge" | "people"             (the engine retrieves; it never writes prose)
 //   scope:      "passport"  | "base"               (people is always base)
 //   asOf:       a point in time                     (defaults to now)
+//   answer is NOT a projection — it's a layer ABOVE the engine (§7).
 ```
 
 - **`about`** — a semantic topic (vector). Ranks (knowledge) or gates (people).
@@ -42,7 +43,7 @@ Everything is optional, so one shape subsumes every query today:
 | `recall(passport, query)` | `about` · knowledge · scope passport |
 | `population(query)` | `about` · people · scope base |
 | `timeline(passport, channels, from)` | `filter` · knowledge · scope passport |
-| `ask(passport, question)` | `about` · answer · scope passport |
+| `ask(passport, question)` | the **`/ask`** layer → `query(about, knowledge)` + synthesis (§7) |
 | an audiences `rule` | `selector` + delivery (saved people projection) |
 
 ## 3. Resolution — the funnel
@@ -174,24 +175,33 @@ set. Cost is governed entirely by how much `about` + `filter` narrowed first.
 
 ## 7. Projections + scope
 
+The query engine **retrieves data — it never writes prose.** Two projections:
+
 | projection | returns | scope | REST | MCP |
 |---|---|---|---|---|
 | `knowledge` | ranked content / evidence (chunks) | passport or base | ✅ | ✅ |
 | `people` | `{ count, passports: [{ id, why }] }` | base only | ✅ | ✅ |
-| `answer` | LLM synthesis over the knowledge + citations | passport or base | ✅ | ❌ |
 
-The selector is identical across all three; the projection is *what you ask back*,
-not part of the predicate. A `people` projection saved + given a delivery **is an
-audience.**
+The selector is identical for both; the projection is *what you ask back*, not part
+of the predicate. A `people` projection saved + given a delivery **is an audience.**
 
-**`answer` is REST-only — not exposed over MCP.** Over MCP the caller is already an
-LLM agent, so a server-side `answer` would be a *nested* LLM call: the server burns
-a model round-trip (with a possibly weaker model) to synthesize what the calling
-agent does natively. `answer` exists for **non-agent** REST clients — a dashboard, a
-"summarize this customer" button — that want a ready answer without running their
-own model. An MCP agent takes `knowledge` and answers in its own context. The MCP
-`query` tool's description says so: *returns evidence (`knowledge`) or cohorts
-(`people`) — answer natural-language questions yourself from the evidence.*
+### `answer` is a layer on top, not a projection
+
+Answering a natural-language question is `synthesize(question, query(…, knowledge))`
+— it *consumes* the `knowledge` result and **generates** prose, so it lives one
+layer **above** the engine, never inside it. The distinction that keeps this clean:
+
+- **`judge` = LLM as a *predicate*** — decides membership (a boolean per candidate).
+  That's *selection* → it belongs **inside** the engine.
+- **`answer` = LLM as a *generator*** — writes prose over results. That's *synthesis*
+  → it belongs **above** it.
+
+**Rule: the engine may use an LLM to decide *who/what is in*, never to *write about*
+the result.** Answering surfaces as a thin REST **`/ask`** for non-agent callers (a
+dashboard, a "summarize this customer" button). There is **no MCP `/ask`** — an MCP
+client is already an LLM agent, so it takes `knowledge` and answers in its own
+context (the `query` tool's description says so). The core query engine never knows
+about answering.
 
 ## 8. Time
 
@@ -227,7 +237,8 @@ accident. *Preview ≡ a `people` resolve with cost metadata* — which is what 
 
 ```js
 // knowledge · passport — "what do we know about Jane re: pricing?"
-resolve({ about: "pricing, plans" }, { projection: "answer", scope: "passport", passport: "p1" })
+resolve({ about: "pricing, plans" }, { projection: "knowledge", scope: "passport", passport: "p1" })
+//   ↑ a natural-language answer = the /ask layer calling this, then synthesizing (§7) — not a projection
 
 // people · base — interested in whitening (dental)
 resolve({ about: "teeth whitening, whitening cost" }, { projection: "people" })
@@ -253,8 +264,9 @@ resolve({ filter: { fact: { lifetime_value: { gte: 500 } } } }, { projection: "p
 
 ## 11. How today maps (migration)
 
-- analytics `recall`/`population`/`timeline`/`ask` → `resolve(selector, { projection, scope })`,
-  old params kept as aliases.
+- analytics `recall`/`population`/`timeline` → `resolve(selector, { projection, scope })`
+  (knowledge / people), old params kept as aliases. `ask` → the **`/ask`** layer
+  *above* the engine (`resolve(…, knowledge)` + LLM synthesis), REST-only.
 - an audiences `rule` → `{ select: selector, delivery, ttl }`; `seed`/`criteria`/
   `threshold` → `about`/`judge`; `requires.metric` → `filter.metric`;
   `requires.crm` → `filter.fact`.
@@ -277,8 +289,9 @@ a selector directly against core, no plugin in the path:
 
 ```
 core       memories (awareness + facts) + identity + selector engine
-           └── QUERY → REST  /query · /preview          ← first-class surface
-                       MCP   query · preview
+           ├── QUERY → REST /query · /preview  ·  MCP query · preview   (retrieves: knowledge | people)
+           └── /ask  → REST only — a thin layer over QUERY(knowledge) + LLM synthesis
+                       (no MCP /ask: the agent IS the answer layer)
 
 plugins    write     (mail / sms / voip / engagement / conversions / crm → the two memories)
            activate  (audiences → save a people-selector + delivery + keep-warm)   [backend]
