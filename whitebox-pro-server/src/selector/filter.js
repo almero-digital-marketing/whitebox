@@ -1,4 +1,5 @@
 import * as facts from '../facts/index.js'
+import * as metric from './metric.js'
 
 // Boolean evaluation of a selector's `filter` tree → an array of passport ids.
 // A leaf clause (e.g. `fact`) resolves to the set of passports that match; the
@@ -18,6 +19,7 @@ export async function evaluate(node, ctx) {
   if (node.any) return unionAll(await Promise.all(node.any.map(c => evaluate(c, ctx))))
   if (node.not) return difference(await ctx.universe(), await evaluate(node.not, ctx))
   if (node.fact) return evalFact(node.fact, ctx)
+  if (node.metric) return metric.evaluate(ctx.db, node.metric, { at: ctx.at, scope: ctx.scope })
   throw new Error(`selector.filter: unknown clause ${JSON.stringify(node)}`)
 }
 

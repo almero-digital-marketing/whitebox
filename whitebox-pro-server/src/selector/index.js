@@ -36,6 +36,7 @@ export async function resolve(selector = {}, { projection = 'people', scope, asO
   const ctx = {
     at,
     scope: scopeArr,
+    db,                          // metric clauses aggregate the awareness exposure stream
     universe: async () => {
       if (scopeArr) return scopeArr
       if (!universeCache) {
