@@ -107,3 +107,48 @@ export function matchTemporal(history, predicate, now = new Date()) {
   }
   return true
 }
+
+// The `matched_at` of a temporal match: the qualifying event's observed_at, or
+// null if the predicate doesn't hold. For each op we take the LATEST qualifying
+// row (the most recent time it became true); a multi-op predicate composites to
+// the latest across ops (the moment the whole predicate was satisfied). This is
+// the funnel anchor for a temporal step. See docs/selector.md §7.
+export function temporalMatchedAt(history, predicate, now = new Date()) {
+  const nowMs = now.getTime()
+  const p = predicate || {}
+  const inWin = (r, w) => new Date(r.observed_at).getTime() >= nowMs - ms(w)
+
+  let composite = null
+  for (const [op, spec] of Object.entries(p)) {
+    let best = null   // latest qualifying observed_at (ms) for this op
+    for (let i = 0; i < history.length; i++) {
+      const r = history[i]
+      let ok = false
+      switch (op) {
+        case 'changed':
+          ok = i > 0 && inWin(r, spec.last) && r.value !== history[i - 1].value
+          break
+        case 'transition': {
+          if (i === 0 || !inWin(r, spec.last)) break
+          const prev = history[i - 1].value
+          if (prev === r.value) break
+          if (spec.to !== undefined && r.value !== spec.to) break
+          if (spec.from !== undefined && prev !== spec.from) break
+          ok = true
+          break
+        }
+        case 'decreased':
+          ok = i > 0 && inWin(r, spec.last) && cmp(r.value, history[i - 1].value) < 0
+          break
+        case 'increased':
+          ok = i > 0 && inWin(r, spec.last) && cmp(r.value, history[i - 1].value) > 0
+          break
+        default: throw new Error(`facts: unknown temporal operator "${op}"`)
+      }
+      if (ok) { const t = new Date(r.observed_at).getTime(); if (best == null || t > best) best = t }
+    }
+    if (best == null) return null               // this op never qualified → no match
+    if (composite == null || best > composite) composite = best
+  }
+  return composite == null ? null : new Date(composite)
+}

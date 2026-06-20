@@ -54,7 +54,7 @@ export async function currentByKey(key, { at, scope } = {}) {
   if (scope?.length) q = q.whereIn('passport_id', scope)
   return q
     .orderBy([{ column: 'passport_id' }, { column: 'observed_at', order: 'desc' }])
-    .select('passport_id', 'value')
+    .select('passport_id', 'value', 'observed_at')   // observed_at = the matched_at for a value-op match
 }
 
 // Every row for `key` (optionally up to `at`, restricted to `scope`), ordered so

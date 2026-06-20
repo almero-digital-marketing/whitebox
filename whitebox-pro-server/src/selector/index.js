@@ -52,9 +52,11 @@ export async function resolve(selector = {}, opts = {}) {
   throw new Error(`selector: projection "${projection}" not implemented yet`)
 }
 
-// people — about gates → filter → judge → ids.
+// people — about gates → filter → judge → ids, each carrying matched_at (§7): the
+// deterministic filter's qualifying-event time. Null (omitted) for a judge match
+// (no clean event time) — so a judged step can't anchor a windowed funnel step.
 async function resolvePeople(selector, opts) {
-  const { candidateIds } = await narrow(selector, opts)
+  const { candidateIds, timed } = await narrow(selector, opts)
 
   // `judge` — the LLM predicate, last, on the already-narrowed candidates only
   // (cost is bounded by about + filter). Confirmed survivors carry score + why.
@@ -67,7 +69,13 @@ async function resolvePeople(selector, opts) {
     return { count: survivors.length, passports: survivors.map(s => ({ id: s.id, why: s.reason, score: s.score })) }
   }
 
-  return { count: candidateIds.length, passports: candidateIds.map(id => ({ id })) }   // matched_at (funnels) lands later
+  return { count: candidateIds.length, passports: candidateIds.map(id => withMatchedAt(id, timed.get(id))) }
+}
+
+// matched_at is included only when known — a normal people query stays `{ id }`;
+// a deterministic (fact-anchored) one carries `{ id, matched_at }` for funnels.
+function withMatchedAt(id, at) {
+  return at != null ? { id, matched_at: at } : { id }
 }
 
 // knowledge — ranked evidence (chunks), never prose (prose is the /ask layer §7).
@@ -195,8 +203,8 @@ async function narrow(selector, { scope, asOf } = {}) {
     },
   }
 
-  const candidateIds = await filter.evaluate(selector.filter, ctx)
-  return { candidateIds, aboutCohort, fullScan }
+  const timed = await filter.evaluateTimed(selector.filter, ctx)
+  return { timed, candidateIds: [...timed.keys()], aboutCohort, fullScan }
 }
 
 // Evidence handed to the judge for one candidate: the about-recalled chunks

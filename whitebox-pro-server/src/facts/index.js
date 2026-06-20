@@ -2,7 +2,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 import * as store from './store.js'
-import { matchValue, matchTemporal, isTemporal } from './operators.js'
+import { matchValue, matchTemporal, temporalMatchedAt, isTemporal } from './operators.js'
 
 // Facts — the core structured memory: an append-only, typed, value-queryable
 // per-passport fact timeline (the structured twin of awareness). Channel-
@@ -114,9 +114,11 @@ export async function test(passport_id, key, predicate, { at } = {}) {
   return matchValue(rows.length ? rows[0].value : undefined, predicate, now)
 }
 
-// Population: the passport ids whose `key` matches `predicate` (current or as-of),
-// optionally restricted to `scope` (an array of passport ids).
-export async function matches(key, predicate, { at, scope } = {}) {
+// Population WITH the qualifying-event time: `[{ id, matched_at }]` for every
+// passport whose `key` matches `predicate` (current or as-of), optionally
+// restricted to `scope`. matched_at is the value row's observed_at (value op) or
+// the qualifying event's observed_at (temporal op) — the funnel anchor (§7).
+export async function matchesTimed(key, predicate, { at, scope } = {}) {
   const now = at ? new Date(at) : new Date()
   const scopeArr = scope == null ? undefined : [].concat(scope)
 
@@ -129,10 +131,20 @@ export async function matches(key, predicate, { at, scope } = {}) {
       h.push(r)
     }
     const out = []
-    for (const [pid, hist] of byPassport) if (matchTemporal(hist, predicate, now)) out.push(pid)
+    for (const [pid, hist] of byPassport) {
+      const matchedAt = temporalMatchedAt(hist, predicate, now)
+      if (matchedAt != null) out.push({ id: pid, matched_at: matchedAt })
+    }
     return out
   }
 
   const rows = await store.currentByKey(key, { at: at && now, scope: scopeArr })
-  return rows.filter(r => matchValue(r.value, predicate, now)).map(r => r.passport_id)
+  return rows
+    .filter(r => matchValue(r.value, predicate, now))
+    .map(r => ({ id: r.passport_id, matched_at: r.observed_at ? new Date(r.observed_at) : null }))
+}
+
+// Population: just the passport ids (the membership view of matchesTimed).
+export async function matches(key, predicate, opts) {
+  return (await matchesTimed(key, predicate, opts)).map(r => r.id)
 }
