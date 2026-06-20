@@ -252,10 +252,13 @@ The same hollowing we found for analytics and audiences applies here — and it'
 the shape the whole redesign converges on:
 
 ```
-core     = the two memories (awareness + facts) + identity + selector + projections
-plugins  = thin surfaces →  write   (mail / sms / voip / engagement / conversions / crm)
-                            read    (analytics)
-                            activate(audiences)
+core       memories (awareness + facts) + identity + selector engine
+           └── QUERY → REST /query · /preview  +  MCP query · preview   ← first-class surface
+
+plugins    write     (mail / sms / voip / engagement / conversions / crm → the two memories)
+           activate  (audiences → save a people-selector + delivery + keep-warm)
+
+analytics  the UI — query builder + segment / audience manager, over core QUERY + audiences
 ```
 
 CRM is no longer a *data module*; it's the **structured‑facts write‑channel** —

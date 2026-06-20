@@ -263,15 +263,25 @@ resolve({ filter: { fact: { lifetime_value: { gte: 500 } } } }, { projection: "p
 
 ## 13. Where this leaves the architecture
 
+The query itself is a **core surface**, exposed both ways — apps and agents resolve
+a selector directly against core, no plugin in the path:
+
 ```
-core     = the two memories (awareness + facts) + identity + selector + projections
-plugins  = thin surfaces →  write    (mail / sms / voip / engagement / conversions / crm)
-                            read     (analytics → projection: knowledge | answer | people)
-                            activate (audiences → saved people-selector + delivery)
+core       memories (awareness + facts) + identity + selector engine
+           └── QUERY → REST  /query · /preview          ← first-class surface
+                       MCP   query · preview
+
+plugins    write     (mail / sms / voip / engagement / conversions / crm → the two memories)
+           activate  (audiences → save a people-selector + delivery + keep-warm)   [backend]
+
+analytics  the UI — query builder + segment / audience manager, over core QUERY + audiences
 ```
 
-Analytics becomes the read surface, audiences the activate surface, both thin over
-the core selector. (See [temporal facts §9](temporal-facts.md).)
+So **core exposes QUERY** (resolve → knowledge | people | answer) as REST + MCP;
+**analytics becomes the UI** (build → preview → save-as-audience — the "view + act"
+console); **audiences stays the activation backend** (the data-egress boundary:
+networks, consent, keep-warm). A *saved selector / segment* is a thin **core**
+concept; audiences attaches delivery to it. (See [temporal facts §9](temporal-facts.md).)
 
 ## 14. Out of scope (named so the gap is a choice)
 
@@ -282,7 +292,8 @@ the core selector. (See [temporal facts §9](temporal-facts.md).)
 
 ---
 
-**Next (after build of [facts](temporal-facts.md)):** the core `selector` schema +
-`resolve()` (the funnel) + the three projections + `preview()`; then re-point
-analytics at it (read) and audiences at it (activate + delivery). The facts brick
-goes in first.
+**Build order (after [facts](temporal-facts.md)):** core `selector` schema +
+`resolve()` (the funnel) + the three projections + `preview()` → **expose QUERY as
+REST `/query` `/preview` + MCP** → audiences-on-selector (activation + delivery) →
+the **analytics UI** (query builder + segment manager) last. The facts brick goes
+in first.
