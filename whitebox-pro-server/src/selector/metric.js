@@ -3,14 +3,15 @@
 // the *event* half of the filter (the `fact` half is structured memory). See
 // docs/selector.md §5.
 //
-//   { metric: { content?, channel?, direction?, within?, <agg>: { gte?, lte?, field? } } }
+//   { metric: { content?, channel?, direction?, last?, <agg>: { gte?, lte?, field? } } }
 //   <agg> ∈ count | distinct_sessions | sum_dwell_ms | sum | recency_days
+//   last  — the lookback window (a past window; e.g. "2 pricing visits in the last 30d")
 //
 // awareness owns the exposures table; the selector reads it for these gates.
 
 const EXPOSURES = 'whitebox_awareness_exposures'
 const MS = { h: 3600e3, d: 86400e3, w: 604800e3 }
-const FILTER_KEYS = ['content', 'channel', 'direction', 'within']
+const FILTER_KEYS = ['content', 'channel', 'direction', 'last']
 const AGGS = ['count', 'distinct_sessions', 'sum_dwell_ms', 'sum', 'recency_days']
 
 function windowMs(w) {
@@ -32,7 +33,7 @@ function parse(spec) {
 }
 
 export async function evaluate(db, spec, { at, scope } = {}) {
-  const { content, channel, direction, within, agg, field, gte, lte } = parse(spec)
+  const { content, channel, direction, last, agg, field, gte, lte } = parse(spec)
   const now = at ? new Date(at) : new Date()
 
   let q = db(EXPOSURES)
@@ -41,7 +42,7 @@ export async function evaluate(db, spec, { at, scope } = {}) {
   if (channel) q = q.where('channel', channel)
   if (direction) q = q.where('direction', direction)
   if (at) q = q.where('ts', '<=', now)                                    // as-of: ignore the future
-  if (within) q = q.where('ts', '>=', new Date(now.getTime() - windowMs(within)))
+  if (last) q = q.where('ts', '>=', new Date(now.getTime() - windowMs(last)))   // lookback window
   q = q.groupBy('passport_id').select('passport_id')
 
   if (agg === 'recency_days') {

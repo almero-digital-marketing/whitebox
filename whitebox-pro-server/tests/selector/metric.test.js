@@ -70,8 +70,8 @@ describe('selector metric clauses', () => {
     const a = await newPassport()
     await exposure(a, { ts: daysAgo(40), content_id: 'pricing' })   // old
     await exposure(a, { ts: daysAgo(2), content_id: 'pricing' })    // recent
-    expect(ids(await resolvePeople({ metric: { content: 'pricing', within: '7d', count: { gte: 1 } } }))).toEqual([a])
-    expect((await resolvePeople({ metric: { content: 'pricing', within: '7d', count: { gte: 2 } } })).count).toBe(0)
+    expect(ids(await resolvePeople({ metric: { content: 'pricing', last: '7d', count: { gte: 1 } } }))).toEqual([a])
+    expect((await resolvePeople({ metric: { content: 'pricing', last: '7d', count: { gte: 2 } } })).count).toBe(0)
   })
 
   it('distinct_sessions', async () => {

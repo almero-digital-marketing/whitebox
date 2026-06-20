@@ -31,11 +31,11 @@ describe('matchValue — value operators', () => {
     expect(mv(undefined, { eq: 'x' })).toBe(false)       // any op on an absent key fails
   })
 
-  it('date ops: within (upcoming) / since (recent) / before (older)', () => {
-    expect(mv('2026-07-01', { within: '30d' })).toBe(true)    // 11 days ahead
-    expect(mv('2026-07-01', { within: '7d' })).toBe(false)
-    expect(mv('2026-06-10', { since: '30d' })).toBe(true)     // 10 days ago
-    expect(mv('2026-06-10', { since: '5d' })).toBe(false)
+  it('date ops: next (upcoming) / last (recent) / before (older)', () => {
+    expect(mv('2026-07-01', { next: '30d' })).toBe(true)    // 11 days ahead
+    expect(mv('2026-07-01', { next: '7d' })).toBe(false)
+    expect(mv('2026-06-10', { last: '30d' })).toBe(true)     // 10 days ago
+    expect(mv('2026-06-10', { last: '5d' })).toBe(false)
     expect(mv('2026-03-01', { before: '60d' })).toBe(true)    // ~110 days ago
     expect(mv('2026-03-01', { before: '200d' })).toBe(false)
   })
@@ -46,29 +46,29 @@ describe('matchTemporal — change / transition operators', () => {
   const mrr = [row(0, '2026-03-01'), row(240, '2026-04-10'), row(560, '2026-05-20')]
 
   it('transition into a state, windowed', () => {
-    expect(mt(status, { transition: { to: 'cancelled', within: '90d' } })).toBe(true)
-    expect(mt(status, { transition: { to: 'cancelled', within: '3d' } })).toBe(false)   // change was Jun 15
-    expect(mt(status, { transition: { from: 'active', to: 'cancelled', within: '90d' } })).toBe(true)
-    expect(mt(status, { transition: { to: 'active', within: '90d' } })).toBe(false)      // only the initial set
+    expect(mt(status, { transition: { to: 'cancelled', last: '90d' } })).toBe(true)
+    expect(mt(status, { transition: { to: 'cancelled', last: '3d' } })).toBe(false)   // change was Jun 15
+    expect(mt(status, { transition: { from: 'active', to: 'cancelled', last: '90d' } })).toBe(true)
+    expect(mt(status, { transition: { to: 'active', last: '90d' } })).toBe(false)      // only the initial set
   })
 
   it('changed', () => {
-    expect(mt(status, { changed: { within: '30d' } })).toBe(true)
-    expect(mt(status, { changed: { within: '3d' } })).toBe(false)
+    expect(mt(status, { changed: { last: '30d' } })).toBe(true)
+    expect(mt(status, { changed: { last: '3d' } })).toBe(false)
   })
 
   it('increased / decreased', () => {
-    expect(mt(mrr, { increased: { within: '60d' } })).toBe(true)       // 240 → 560 on May 20
-    expect(mt(mrr, { decreased: { within: '60d' } })).toBe(false)
+    expect(mt(mrr, { increased: { last: '60d' } })).toBe(true)       // 240 → 560 on May 20
+    expect(mt(mrr, { decreased: { last: '60d' } })).toBe(false)
     const drop = [row(560, '2026-05-20'), row(300, '2026-06-18')]
-    expect(mt(drop, { decreased: { within: '30d' } })).toBe(true)
+    expect(mt(drop, { decreased: { last: '30d' } })).toBe(true)
   })
 })
 
 describe('isTemporal', () => {
   it('flags temporal predicates', () => {
     expect(isTemporal({ eq: 'pro' })).toBe(false)
-    expect(isTemporal({ transition: { to: 'x', within: '30d' } })).toBe(true)
-    expect(isTemporal({ changed: { within: '7d' } })).toBe(true)
+    expect(isTemporal({ transition: { to: 'x', last: '30d' } })).toBe(true)
+    expect(isTemporal({ changed: { last: '7d' } })).toBe(true)
   })
 })

@@ -121,14 +121,16 @@ filter = clause | { all: [filter…] } | { any: [filter…] } | { not: filter }
 | `channel` / `direction` | awareness dims | equality |
 
 **`fact`** — `{ fact: { <key>: { <op>: <value> } } }`, ops
-`eq/ne/in/gt/lt/within/changed/transition/decreased/present`.
+`eq/ne/in/gt/lt/present`, directional date `next/last/before`, and temporal
+`changed/transition/decreased/increased`.
 
-**`metric`** — `{ metric: { content?, channel?, within?, <agg> } }`, where `<agg>`
-is `count` · `distinct_sessions` · `sum_dwell_ms` · `recency_days` · **`sum`**:
+**`metric`** — `{ metric: { content?, channel?, last?, <agg> } }`, where `<agg>`
+is `count` · `distinct_sessions` · `sum_dwell_ms` · `recency_days` · **`sum`** and
+`last` is the lookback window:
 
 ```js
-{ metric: { content: "purchase", sum: { field: "value", gte: 500 } } }                 // lifetime spend ≥ $500
-{ metric: { content: "purchase", sum: { field: "value", gte: 500 }, within: "30d" } }  // ≥ $500 in last 30 days
+{ metric: { content: "purchase", sum: { field: "value", gte: 500 } } }               // lifetime spend ≥ $500
+{ metric: { content: "purchase", sum: { field: "value", gte: 500 }, last: "30d" } }  // ≥ $500 in the last 30 days
 ```
 
 > **`sum` is currency-naive** — it adds raw `meta.value`. Mixed-currency bases must
@@ -236,8 +238,8 @@ about answering.
 
 Three distinct things, kept separate:
 
-- **window** — *which events count* (`within` / `since` / `until` on a clause,
-  relative-capable). Lives in `filter`.
+- **window** — *which events count* — directional words on a clause: `last`
+  (lookback), `next` (future date), `before` (older-than). Lives in `filter`.
 - **asOf** — *time-travel*; a resolve-time parameter, applied to every memory read.
   Honest because both memories are append-only — except structured facts before
   the timeline's cutover (see [facts §8](temporal-facts.md)).
@@ -278,7 +280,7 @@ resolve({ filter: { all: [ { fact: { order_count: { gte: 1 } } },
         { projection: "people" })
 
 // people · windowed spend — big spenders this quarter
-resolve({ filter: { metric: { content: "purchase", sum: { field: "value", gte: 1000 }, within: "90d" } } },
+resolve({ filter: { metric: { content: "purchase", sum: { field: "value", gte: 1000 }, last: "90d" } } },
         { projection: "people" })
 
 // people · mixed memory + judge — Pro accounts genuinely evaluating competitors
@@ -360,7 +362,10 @@ funnel = {
 }
 ```
 
-Two kinds of window, and they compose:
+Two kinds of window, and they compose. (`within` here is **anchor-relative** — an
+elapsed gap measured from a step event, not from "now" — so it has none of the
+direction ambiguity that retired `within` in `filter` clauses, where windows are
+now-relative `next`/`last`/`before`.)
 
 - **`step.within`** — **relative to the previous step**; the anchor **advances**, so
   step *k*'s clock starts at step *k-1*'s `matched_at`. (Step 3's 14d is from

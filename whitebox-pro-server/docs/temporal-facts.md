@@ -122,38 +122,39 @@ because nothing was overwritten.
 ### Value operators
 The selector's structured clause filters on the current (or as‑of) value. Full set:
 `present` · `eq` · `ne` · `in` · `gt` · `gte` · `lt` · `lte`, plus three relative‑date
-ops for date values — `within` (upcoming), `since` (recent), `before` (older):
+ops for date values — `next` (upcoming), `last` (recent), `before` (older):
 
 ```text
 { fact: { plan_tier:           { eq: "pro" } } }
 { fact: { mrr:                 { gte: 200, lte: 400 } } }            -- multiple ops AND → a range
 { fact: { subscription_status: { in: ["active", "trialing"] } } }
-{ fact: { renewal_date:        { within: "30d" } } }   -- date in the NEXT 30d (upcoming)
-{ fact: { last_order_at:       { since:  "30d" } } }   -- date in the LAST 30d (recent)
+{ fact: { renewal_date:        { next: "30d" } } }   -- date in the NEXT 30d (upcoming)
+{ fact: { last_order_at:       { last:  "30d" } } }   -- date in the LAST 30d (recent)
 { fact: { last_order_at:       { before: "60d" } } }   -- date older than 60d ago
 { fact: { plan_tier:           { present: true } } }   -- old "requires.crm" behavior, still here
 ```
 
-> ⚠️ **`within` direction.** As a value op on a *date*, `within` is the **upcoming**
-> window (the value's date is in the next N). But for the temporal ops below — and for
-> the selector's **metric** `within` — it's the **lookback** window (happened in the
-> last N). Same word, opposite directions; to be disambiguated before the metric layer
-> ships (open item, §11).
+> **Directional windows.** Every window word states its direction, so it can't be
+> misread: **`next`** is the future window (date in the next N — `renewal_date`),
+> **`last`** is the lookback window (date in the last N, *and* the window for the
+> temporal ops below and the selector's `metric`), **`before`** is older-than.
+> (`within` is retired here; it only survives as a funnel's inter-step gap, which is
+> anchor-relative, not now-relative — selector.md §14.)
 
 ### Change / transition predicates
 History unlocks predicates about *movement*, not just state:
 
 ```text
-{ fact: { plan_tier:           { transition: { to: "cancelled", within: "30d" } } } }  -- churned recently
-{ fact: { mrr:                 { decreased: { within: "30d" } } } }                    -- downgrade signal
-{ fact: { seat_count:          { increased: { within: "30d" } } } }                    -- expansion signal
-{ fact: { plan_tier:           { changed:    { within: "30d" } } } }                   -- any plan change
+{ fact: { plan_tier:           { transition: { to: "cancelled", last: "30d" } } } }  -- churned recently
+{ fact: { mrr:                 { decreased: { last: "30d" } } } }                    -- downgrade signal
+{ fact: { seat_count:          { increased: { last: "30d" } } } }                    -- expansion signal
+{ fact: { plan_tier:           { changed:    { last: "30d" } } } }                   -- any plan change
 ```
 
-(Temporal ops: `changed` · `transition {to?,from?}` · `decreased` · `increased`. Here
-`within` is the **lookback** window — see the direction note above.)
+(Temporal ops: `changed` · `transition {to?,from?}` · `decreased` · `increased`. Their
+`last` is the lookback window — see the direction note above.)
 
-Against `p1` on 2026‑06‑20: `plan_tier transition→cancelled within 30d` ✅ (Jun‑15).
+Against `p1` on 2026‑06‑20: `plan_tier transition→cancelled last 30d` ✅ (Jun‑15).
 
 ## 5. Writing — core primitive + sources
 
@@ -231,11 +232,11 @@ resolve(selector, asOf: "2026-11-29")   // who matched as of Black Friday — bo
                    { fact: { seat_count: { gte: 5 } } } ] } }
 
 // 2. Win-back: cancelled in the last 60 days, was once high-value  (pure structured → no LLM)
-{ filter: { all: [ { fact: { subscription_status: { transition: { to: "cancelled", within: "60d" } } } },
+{ filter: { all: [ { fact: { subscription_status: { transition: { to: "cancelled", last: "60d" } } } },
                    { fact: { mrr: { gte: 200 } } } ] } }
 
 // 3. Renewal nudge: renews within 30 days and web engagement has gone quiet
-{ filter: { all: [ { fact: { renewal_date: { within: "30d" } } },
+{ filter: { all: [ { fact: { renewal_date: { next: "30d" } } },
                    { metric: { channel: "web", recency_days: { gte: 14 } } } ] } }
 
 // 4. Fast converters (time-travel): Free at signup, Pro within 90 days
@@ -287,16 +288,16 @@ external‑system ingestion door (+ optional entity convenience), and it does so
 | D1 | core term | **`facts`** — `ctx.facts`, `whitebox_facts`, `filter.fact` (generic; pairs with `awareness`) |
 | D2 | time model | **valid‑time** — `observed_at` is the query axis; `recorded_at` is audit‑only (bitemporal is a clean v2) |
 | D3 | fact grain / entities | **collapsed `passport + key` facts in core + entity table in the adapter**; per‑entity facts are a later refinement |
-| D4 | value operators | **full** — value: `present/eq/ne/in/gt/gte/lt/lte` + date `within/since/before`; temporal: `changed/transition/decreased/increased` — over typed jsonb (§4) |
+| D4 | value operators | **full** — value: `present/eq/ne/in/gt/gte/lt/lte` + directional date `next/last/before`; temporal: `changed/transition/decreased/increased` (window key `last`) — over typed jsonb (§4) |
 | D5 | facts vs awareness | **hard split, no mirror** — typed value → facts only; free‑form note → awareness only |
 | D6 | as‑of scope | **awareness + facts** — both memories roll back together (the §8 cutover caveat is the only asterisk) |
 
 ## 11. Out of scope / open
 
-- **Open — `within` direction:** value‑op `within` (upcoming) reads opposite to the
-  temporal‑op / selector‑metric `within` (lookback). Pick a disambiguating name (e.g.
-  rename one to `next`/`last`, or `due_in`) **before the selector metric layer ships.**
-  Naming call — pending.
+- **Resolved — window direction:** windows are directional words —
+  **`next`** (future), **`last`** (lookback: date recency + temporal ops + selector
+  `metric`), **`before`** (older‑than). `within` is retired (it read two ways); it
+  survives only as a funnel's anchor‑relative inter‑step gap (selector.md §14).
 - **Sequencing / funnels** — "pricing **then** demo **within** 2 days." The model is
   set‑based (windowed aggregates), not sequence‑based. Separate axis, later.
 - **Full bitemporal querying** — "what did we *believe* on date X" (via

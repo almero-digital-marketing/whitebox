@@ -138,7 +138,7 @@ describe('facts.matches (population) + facts.test (per-passport)', () => {
     await facts.record({ passport_id: a, key: 'subscription_status', value: 'active', observed_at: d('2026-04-10') })
     await facts.record({ passport_id: a, key: 'subscription_status', value: 'cancelled', observed_at: d('2026-06-15') })
     await facts.record({ passport_id: b, key: 'subscription_status', value: 'active', observed_at: d('2026-04-10') })
-    const pred = { transition: { to: 'cancelled', within: '90d' } }
+    const pred = { transition: { to: 'cancelled', last: '90d' } }
     expect(await facts.matches('subscription_status', pred, { at: '2026-06-20' })).toEqual([a])
     expect(await facts.test(a, 'subscription_status', pred, { at: '2026-06-20' })).toBe(true)
     expect(await facts.test(b, 'subscription_status', pred, { at: '2026-06-20' })).toBe(false)

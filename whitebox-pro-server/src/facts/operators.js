@@ -58,9 +58,11 @@ export function matchValue(value, predicate, now = new Date()) {
       case 'gte': ok = cmp(value, bound) >= 0; break
       case 'lt':  ok = cmp(value, bound) < 0; break
       case 'lte': ok = cmp(value, bound) <= 0; break
-      case 'within': ok = t != null && t >= nowMs && t <= nowMs + ms(bound); break   // upcoming, e.g. renews in 30d
-      case 'since':  ok = t != null && t >= nowMs - ms(bound) && t <= nowMs; break    // recent, e.g. active in last 30d
-      case 'before': ok = t != null && t < nowMs - ms(bound); break                   // older than, e.g. last order > 60d ago
+      // Directional date windows — each states which way time points, so the
+      // window is unambiguous without knowing the value.
+      case 'next':   ok = t != null && t >= nowMs && t <= nowMs + ms(bound); break    // upcoming, e.g. renews in the next 30d
+      case 'last':   ok = t != null && t >= nowMs - ms(bound) && t <= nowMs; break     // recent, e.g. ordered in the last 30d
+      case 'before': ok = t != null && t < nowMs - ms(bound); break                    // older than, e.g. last order > 60d ago
       default: throw new Error(`facts: unknown value operator "${op}"`)
     }
     if (!ok) return false
@@ -79,13 +81,13 @@ export function matchTemporal(history, predicate, now = new Date()) {
     let ok
     switch (op) {
       case 'changed':
-        ok = history.some((r, i) => i > 0 && inWin(r, spec.within) && r.value !== history[i - 1].value)
+        ok = history.some((r, i) => i > 0 && inWin(r, spec.last) && r.value !== history[i - 1].value)
         break
       case 'transition':
         // A transition needs a prior, different value — the initial observation
         // of a value is not a transition into it.
         ok = history.some((r, i) => {
-          if (i === 0 || !inWin(r, spec.within)) return false
+          if (i === 0 || !inWin(r, spec.last)) return false
           const prev = history[i - 1].value
           if (prev === r.value) return false                        // not a change
           if (spec.to !== undefined && r.value !== spec.to) return false
@@ -94,10 +96,10 @@ export function matchTemporal(history, predicate, now = new Date()) {
         })
         break
       case 'decreased':
-        ok = history.some((r, i) => i > 0 && inWin(r, spec.within) && cmp(r.value, history[i - 1].value) < 0)
+        ok = history.some((r, i) => i > 0 && inWin(r, spec.last) && cmp(r.value, history[i - 1].value) < 0)
         break
       case 'increased':
-        ok = history.some((r, i) => i > 0 && inWin(r, spec.within) && cmp(r.value, history[i - 1].value) > 0)
+        ok = history.some((r, i) => i > 0 && inWin(r, spec.last) && cmp(r.value, history[i - 1].value) > 0)
         break
       default: throw new Error(`facts: unknown temporal operator "${op}"`)
     }
