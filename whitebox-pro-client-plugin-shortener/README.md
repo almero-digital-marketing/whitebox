@@ -1,4 +1,8 @@
-# whitebox-pro-client-plugin-shortener
+# Shortener Client Plugin
+
+> The landing-page half of a personalized short link — redeems the single-use claim token the redirect left in the URL and adopts the customer it was bound to.
+
+## What it is
 
 The landing-page half of a personalized short link. When a visitor arrives via a
 [shortener](../whitebox-pro-server-plugin-shortener) link, the server's redirect left

@@ -1,16 +1,12 @@
-<div align="center">
+# Audiences Plugin
 
-# whitebox-pro-server-plugin-audiences
+> Build ad-network audiences by reasoning over what WhiteBox knows about each person — describe a segment in plain language, and the plugin fires a custom event to Meta, TikTok and Google (GA4), which build the audience.
 
-**Build ad-network audiences by reasoning over what WhiteBox knows about each person.**
+## What it is
 
 Describe a segment in plain language → the plugin reasons over each passport's cross-channel
 awareness (web, email, voip, CRM) against your rule → it reports a custom event to **Meta, TikTok
 and Google (GA4)**, and the platforms build the audience.
-
-</div>
-
----
 
 ## Why this exists
 
