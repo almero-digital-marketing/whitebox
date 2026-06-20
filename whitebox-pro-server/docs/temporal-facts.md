@@ -120,15 +120,25 @@ That one `AND observed_at <= D` is the entire time‑travel mechanism. It's exac
 because nothing was overwritten.
 
 ### Value operators
-The selector's structured clause filters on the current (or as‑of) value:
+The selector's structured clause filters on the current (or as‑of) value. Full set:
+`present` · `eq` · `ne` · `in` · `gt` · `gte` · `lt` · `lte`, plus three relative‑date
+ops for date values — `within` (upcoming), `since` (recent), `before` (older):
 
 ```text
 { fact: { plan_tier:           { eq: "pro" } } }
-{ fact: { mrr:                 { gte: 200 } } }
+{ fact: { mrr:                 { gte: 200, lte: 400 } } }            -- multiple ops AND → a range
 { fact: { subscription_status: { in: ["active", "trialing"] } } }
-{ fact: { renewal_date:        { within: "30d" } } }   -- date value within a window of now
+{ fact: { renewal_date:        { within: "30d" } } }   -- date in the NEXT 30d (upcoming)
+{ fact: { last_order_at:       { since:  "30d" } } }   -- date in the LAST 30d (recent)
+{ fact: { last_order_at:       { before: "60d" } } }   -- date older than 60d ago
 { fact: { plan_tier:           { present: true } } }   -- old "requires.crm" behavior, still here
 ```
+
+> ⚠️ **`within` direction.** As a value op on a *date*, `within` is the **upcoming**
+> window (the value's date is in the next N). But for the temporal ops below — and for
+> the selector's **metric** `within` — it's the **lookback** window (happened in the
+> last N). Same word, opposite directions; to be disambiguated before the metric layer
+> ships (open item, §11).
 
 ### Change / transition predicates
 History unlocks predicates about *movement*, not just state:
@@ -136,8 +146,12 @@ History unlocks predicates about *movement*, not just state:
 ```text
 { fact: { plan_tier:           { transition: { to: "cancelled", within: "30d" } } } }  -- churned recently
 { fact: { mrr:                 { decreased: { within: "30d" } } } }                    -- downgrade signal
+{ fact: { seat_count:          { increased: { within: "30d" } } } }                    -- expansion signal
 { fact: { plan_tier:           { changed:    { within: "30d" } } } }                   -- any plan change
 ```
+
+(Temporal ops: `changed` · `transition {to?,from?}` · `decreased` · `increased`. Here
+`within` is the **lookback** window — see the direction note above.)
 
 Against `p1` on 2026‑06‑20: `plan_tier transition→cancelled within 30d` ✅ (Jun‑15).
 
@@ -273,12 +287,16 @@ external‑system ingestion door (+ optional entity convenience), and it does so
 | D1 | core term | **`facts`** — `ctx.facts`, `whitebox_facts`, `filter.fact` (generic; pairs with `awareness`) |
 | D2 | time model | **valid‑time** — `observed_at` is the query axis; `recorded_at` is audit‑only (bitemporal is a clean v2) |
 | D3 | fact grain / entities | **collapsed `passport + key` facts in core + entity table in the adapter**; per‑entity facts are a later refinement |
-| D4 | value operators | **full** — `eq/ne/in/gt/lt/within/changed/transition/decreased` over typed jsonb |
+| D4 | value operators | **full** — value: `present/eq/ne/in/gt/gte/lt/lte` + date `within/since/before`; temporal: `changed/transition/decreased/increased` — over typed jsonb (§4) |
 | D5 | facts vs awareness | **hard split, no mirror** — typed value → facts only; free‑form note → awareness only |
 | D6 | as‑of scope | **awareness + facts** — both memories roll back together (the §8 cutover caveat is the only asterisk) |
 
-## 11. Out of scope (named so the gap is a choice)
+## 11. Out of scope / open
 
+- **Open — `within` direction:** value‑op `within` (upcoming) reads opposite to the
+  temporal‑op / selector‑metric `within` (lookback). Pick a disambiguating name (e.g.
+  rename one to `next`/`last`, or `due_in`) **before the selector metric layer ships.**
+  Naming call — pending.
 - **Sequencing / funnels** — "pricing **then** demo **within** 2 days." The model is
   set‑based (windowed aggregates), not sequence‑based. Separate axis, later.
 - **Full bitemporal querying** — "what did we *believe* on date X" (via
