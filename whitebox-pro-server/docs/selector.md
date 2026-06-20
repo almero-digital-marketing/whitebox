@@ -306,7 +306,7 @@ core       memories (awareness + facts) + identity + selector engine
                        (no MCP /ask: the agent IS the answer layer)
 
 plugins    write     (mail / sms / voip / engagement / conversions / crm → the two memories)
-           activate  (audiences → save a people-selector + delivery + keep-warm)   [backend]
+           activate  (audiences → save a people-cohort [selector or funnel slot] + delivery + keep-warm)  [backend]
 
 analytics  the UI — query builder + segment / audience manager, over core QUERY + audiences
 ```
@@ -315,8 +315,9 @@ So **core exposes QUERY** (resolve → knowledge | people; answering is a layer 
 top) as REST + MCP;
 **analytics becomes the UI** (build → preview → save-as-audience — the "view + act"
 console); **audiences stays the activation backend** (the data-egress boundary:
-networks, consent, keep-warm). A *saved selector / segment* is a thin **core**
-concept; audiences attaches delivery to it. (See [temporal facts §9](temporal-facts.md).)
+networks, consent, keep-warm). An audience targets a **people-cohort** — a saved
+selector *or* a funnel slot (§14) — and audiences attaches delivery to it. (See
+[temporal facts §9](temporal-facts.md).)
 
 ## 14. Funnels (v1)
 
@@ -407,6 +408,33 @@ Both outputs are projections: the **drop-off report** is `knowledge`; the per-st
 **gap cohorts** are `people` (each gap saveable as an audience). Enabling hooks, **live
 in v1**: `matched_at` on the `people` result (§7), and **`scope: a candidate set`** on
 `resolve()` (feed a step's cohort to the next).
+
+### Acting on a funnel (audiences)
+
+An **audience is a saved people-cohort + delivery** — and a funnel *produces*
+people-cohorts, so an audience source generalizes from "a selector" to a funnel slot:
+
+```js
+audience.source =
+  { select: <selector> }                                        // a plain people-selector
+  { funnel: trialFunnel, slot: "step:2" }                       // that step's completers
+  { funnel: trialFunnel, slot: "gap:2→3", status: "pending" }   // the drop-off cohort
+```
+
+The **gap** is the retargeting payoff — `gap:2→3` = "activated, didn't purchase" →
+push to Meta/TikTok. The audience stays thin: it takes whatever people-cohort the
+funnel resolves and delivers it.
+
+**`status` — when someone is "in the gap":**
+- **`pending`** *(default)* — did step *k*, hasn't done *k+1*, **still inside the
+  window** → act now, before they're lost (the higher-value case — you can still save them).
+- **`dropped`** — the window **closed** without advancing → win-back; they're gone.
+
+**Self-draining via keep-warm.** A gap cohort changes as people progress — someone
+stuck at step 2 today who purchases tomorrow *leaves* the gap. The existing keep-warm
+re-evaluation handles it for free: re-resolve the funnel, the gap drains, the converter
+stops being re-fired, the platform ages them out. So a funnel-gap audience is a **live
+audience that empties as people convert.**
 
 ### Out of scope
 
