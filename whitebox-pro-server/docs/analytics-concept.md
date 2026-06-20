@@ -174,6 +174,32 @@ QUERY, and any cohort on it is one move from an audience. It's the concrete form
 *"analytics becomes the UI"* — the composition layer, owning composition state and
 nothing else.
 
+## 12. Stack (v1)
+
+Backend and AI **reuse the existing server stack**; only the frontend is new.
+
+**Composition plugin (backend)** — Node · Express · Knex/Postgres (its own tables;
+JSONB report/widget/query defs) · zod · Socket.IO (live) · MCP tools via `ctx`. Calls
+core QUERY / `/ask` / audiences **in-process via `ctx`**, reimplements none. The AI
+runtime is the existing **`ctx.ai`** facade (OpenAI today) driving a server-side
+tool-use loop over the composition + query MCP verbs — no second AI provider.
+
+**Dashboard UI (frontend, the only new piece)** — a Vite + Vue 3 SPA:
+
+| concern | pick |
+|---|---|
+| app | **Vite + Vue 3 + TypeScript** (Composition API) |
+| chrome · tables · forms | **PrimeVue** — incl. its **DataTable** for the `table` widget |
+| dashboard canvas | **grid-layout-plus** (draggable/resizable; backs the `arrange` verb) |
+| charts | **vue-echarts** — stat / timeseries / breakdown / **funnel** |
+| server state | **@tanstack/vue-query** |
+| ui state | **Pinia** |
+| live | **socket.io-client** |
+
+Division of labor: **PrimeVue** for chrome + tables + forms, **vue-echarts** for the
+visual charts. The chat/compose box drives the server-side agent; the board updates as
+the agent calls the composition verbs; charts stream live over WS.
+
 ---
 
 **Build note:** this is the analytics **plugin** — its own state (reports/widgets/
