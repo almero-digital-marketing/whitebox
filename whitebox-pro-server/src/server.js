@@ -82,7 +82,7 @@ async function start() {
 
   // Selector — the query engine over the two memories (awareness + facts).
   // See docs/selector.md. Exposed on ctx as `selector`.
-  selector.init({ db: db.get(), passports, logger })
+  selector.init({ db: db.get(), passports, logger, awareness, config })
   logger.info('Selector ready')
 
   if (RESET) {
