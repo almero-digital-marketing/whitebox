@@ -186,6 +186,23 @@ The query engine **retrieves data — it never writes prose.** Two projections:
 The selector is identical for both; the projection is *what you ask back*, not part
 of the predicate. A `people` projection saved + given a delivery **is an audience.**
 
+#### Grouping — time-series
+
+By default `resolve()` returns one result. Trend charts (the analytics dashboard,
+[analytics-dashboard.md](analytics-dashboard.md)) need a **series**, so a query
+takes an optional **`group: { by: "<bucket>" }`** that buckets a `metric`/`count`
+aggregate by time and returns `[{ bucket, value }]`:
+
+```js
+resolve({ filter: { metric: { content: "purchase", count: {} } } },
+        { projection: "knowledge", group: { by: "week" } })
+// → [ { bucket: "2026-W10", value: 42 }, { bucket: "2026-W11", value: 51 }, … ]
+```
+
+Grouping the metric is the cheap path; sweeping `asOf` across buckets also works but
+costs N resolves. This is the one engine capability charts add; everything else is
+composition.
+
 #### `matched_at` — the funnel anchor
 
 Each person in a `people` result carries an optional **`matched_at`** — the
