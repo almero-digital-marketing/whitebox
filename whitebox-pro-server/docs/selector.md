@@ -58,7 +58,7 @@ resolve(selector, { projection, scope, asOf })
   scope ─► 1. about    (semantic narrow + rank)        reads AWARENESS  vector  ← cheap-ish
            2. filter   (boolean gates)                 reads FACTS + AWARENESS  ← cheap (SQL)
            3. judge    (LLM predicate, optional)        per surviving candidate  ← EXPENSIVE
-           4. project  (knowledge | people | answer)
+           4. project  (knowledge | people)              ← answer is a layer above (§7)
 
   asOf ── ts ≤ asOf (awareness) · observed_at ≤ asOf (facts) — both memories roll back together
 ```
