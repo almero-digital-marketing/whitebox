@@ -23,6 +23,7 @@ import * as ai from './ai.js'
 import * as templates from './templates.js'
 import * as awareness from './awareness/index.js'
 import * as facts from './facts/index.js'
+import * as selector from './selector/index.js'
 import * as context from './context.js'
 import * as mcp from './mcp.js'
 import createAuth, { resolveMcpAuth } from './auth.js'
@@ -79,6 +80,11 @@ async function start() {
   await facts.migrate()
   logger.info('Facts ready')
 
+  // Selector — the query engine over the two memories (awareness + facts).
+  // See docs/selector.md. Exposed on ctx as `selector`.
+  selector.init({ db: db.get(), passports, logger })
+  logger.info('Selector ready')
+
   if (RESET) {
     await awareness.reset()
     logger.warn('Awareness data wiped (--reset)')
@@ -115,6 +121,7 @@ async function start() {
     template,
     awareness,
     facts,
+    selector,
     context,
     mcp,
     plugins,
