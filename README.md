@@ -74,24 +74,6 @@ into a single customer, so a call, a click and a reply belong to the same person
 
 ---
 
-## In one picture
-
-```
-   web · email · sms · voice · crm
-              │   every touch, tied to one customer
-              ▼
-        one customer memory
-              │   ask in plain language
-        ┌─────┴───────────────┬───────────────────┐
-        ▼                     ▼                   ▼
-   an answer            an audience            a trend
-   (grounded,        (pushed to Meta /        (chart over
-    cited)            TikTok / Google,         your base)
-                      self‑updating)
-```
-
----
-
 ## Want the details?
 
 **Operators & marketers:** start with the **[documentation](docs/)** —
