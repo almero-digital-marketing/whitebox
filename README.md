@@ -2,7 +2,7 @@
   <img src="whitebox.svg" alt="WhiteBox" width="320" />
 </p>
 
-<p align="center"><strong>Know each customer like a person — not a pile of disconnected analytics.</strong></p>
+<p align="center"><strong>The AI-native marketing data brain.</strong></p>
 
 # WhiteBox
 
