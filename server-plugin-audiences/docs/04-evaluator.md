@@ -7,7 +7,7 @@ engine's about → filter → judge funnel. All of that is gone (`src/features/*
 owns every bit of selection; this module just maps a rule's saved `select` (or `funnel`) onto it.
 
 For the funnel mechanics — `about`, `filter`, `judge`, `preview`, and the `funnel` slot model — read the
-selector spec: [`whitebox-pro-server/docs/selector.md`](../../whitebox-pro-server/docs/selector.md).
+selector spec: [`whitebox-pro-server/docs/selector.md`](../../server/docs/selector.md).
 This doc stays focused on **how the plugin uses the engine.**
 
 ## The delegation model

@@ -26,7 +26,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 5173)
 const TARGET = new URL(process.env.WB_SERVER || 'http://localhost:3000')
 const TARGET_PORT = Number(TARGET.port || (TARGET.protocol === 'https:' ? 443 : 80))
-const SERVER_DIR = path.resolve(__dirname, '../../whitebox-pro-server')
+const SERVER_DIR = path.resolve(__dirname, '../../server')
 const TARGET_IS_LOCAL = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(TARGET.hostname)
 const START_SERVER = process.env.WB_START_SERVER !== '0' && TARGET_IS_LOCAL
 

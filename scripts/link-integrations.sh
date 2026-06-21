@@ -18,7 +18,8 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INTEGRATIONS_DIR="${WB_INTEGRATIONS_DIR:-$(cd "$ROOT/.." && pwd)/whitebox-pro-integrations}"
-KERNEL="whitebox-pro-adnetworks"
+KERNEL_PKG="whitebox-pro-adnetworks"   # package name (dependency + symlink name)
+KERNEL_DIR="adnetworks"               # in-tree folder (symlink target)
 
 if [ ! -d "$INTEGRATIONS_DIR" ]; then
   echo "No integrations directory at $INTEGRATIONS_DIR — nothing to link."
@@ -36,10 +37,10 @@ for dir in "$INTEGRATIONS_DIR"/*/; do
   name="$(node -p "require('$dir/package.json').name" 2>/dev/null)" || continue
   printf '  → %-28s' "$name"
 
-  if node -e "process.exit((require('$dir/package.json').dependencies||{})['$KERNEL']?0:1)"; then
+  if node -e "process.exit((require('$dir/package.json').dependencies||{})['$KERNEL_PKG']?0:1)"; then
     # adnetwork: bridge the unpublished kernel (its only runtime dep)
     mkdir -p "$dir/node_modules"
-    ln -sfn "$ROOT/$KERNEL" "$dir/node_modules/$KERNEL"
+    ln -sfn "$ROOT/$KERNEL_DIR" "$dir/node_modules/$KERNEL_PKG"
     echo "[kernel bridged]"
   else
     # mail/auth/etc: ensure registry deps are installed (idempotent), ignoring

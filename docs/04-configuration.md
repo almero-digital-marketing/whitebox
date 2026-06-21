@@ -77,7 +77,7 @@ comparison. Public ingress endpoints (browser-facing: `/sessions/resolve`,
 ## Environment reference
 
 All secrets and connection details come from `process.env` (loaded from
-`whitebox-pro-server/.env` via `--env-file-if-exists`). The config file itself
+`server/.env` via `--env-file-if-exists`). The config file itself
 holds no secrets.
 
 ### Core

@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Whitebox monorepo — server core, browser client, and channel plugins. Each workspace publishes as its own npm package.",
   "workspaces": [
-    "whitebox-pro-server",
-    "whitebox-pro-client",
-    "whitebox-pro-adnetworks",
+    "server",
+    "client",
+    "adnetworks",
     "server-plugin-*",
     "client-plugin-*"
   ],

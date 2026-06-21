@@ -21,8 +21,8 @@ One passport, one timeline — website reads and patient-portal actions land in 
    npm install
    npm run build --workspace=whitebox-pro-client
    ```
-2. **Redis running** and `whitebox-pro-server/.env` filled in (copy `.env.example`).
-3. The server config (`whitebox-pro-server/whitebox.config.js`) must load the plugins this demo uses. Plugins are factories called with their options (`crm` needs an auth token or it won't register):
+2. **Redis running** and `server/.env` filled in (copy `.env.example`).
+3. The server config (`server/whitebox.config.js`) must load the plugins this demo uses. Plugins are factories called with their options (`crm` needs an auth token or it won't register):
    ```js
    import { engagement } from 'whitebox-pro-server-plugin-engagement'
    import { crm } from 'whitebox-pro-server-plugin-crm'
@@ -65,7 +65,7 @@ The **Fire standard events** card sends each conversion two ways under one share
 - **Browser pixels** — `serve.mjs` injects the Meta / GA4 / TikTok base snippets into the page **when their ids are set** (below); the conversions client fires `Purchase`/`ViewContent`/… on whatever's loaded.
 - **Server-side (SST)** — the same event POSTs to `/conversions/events`; the server `conversions` plugin records it into awareness and, for each **configured** network, fans out (Meta CAPI / TikTok Events API).
 
-Both read the **same env vars** — set them in `whitebox-pro-server/.env` (the demo and the server both load it):
+Both read the **same env vars** — set them in `server/.env` (the demo and the server both load it):
 
 | env var | network | used by | what it is |
 |---|---|---|---|
@@ -79,7 +79,7 @@ Both read the **same env vars** — set them in `whitebox-pro-server/.env` (the 
 
 > **GA4 is client-side only** here: GA4 has no pixel↔Measurement-Protocol `event_id` dedup, so we fire `gtag` in the browser and **don't** enable the server `google` adapter (it would double-count non-purchase events). Meta and TikTok fire both legs, deduped.
 
-Then make the server fan out: your `whitebox-pro-server/whitebox.config.js` must include `conversions` with a `networks` block (the committed `whitebox.config.example.js` already has it):
+Then make the server fan out: your `server/whitebox.config.js` must include `conversions` with a `networks` block (the committed `whitebox.config.example.js` already has it):
 
 ```js
 import { meta } from 'whitebox-pro-adnetworks-meta'
@@ -126,7 +126,7 @@ node examples/integration/seed.mjs      # ~30 patients   (COUNT=60 for more)
 
 Give embeddings a few seconds, then open the console's **All customers** tab and ask *"What treatments are patients most interested in?"* or run a cohort on *"teeth whitening"* / *"dental implants"*. The personas read the service copy (whitening, Invisalign, implants, pricing/insurance) and fire matching CRM observations, so cohorts and themes are real.
 
-> **`--reset` is destructive** — it clears *all* awareness content (every passport's reads / observations / calls) on whatever DB `whitebox-pro-server/.env` points at. Demo/dev databases only.
+> **`--reset` is destructive** — it clears *all* awareness content (every passport's reads / observations / calls) on whatever DB `server/.env` points at. Demo/dev databases only.
 
 ## Verify on the server
 

@@ -5,7 +5,7 @@ A rule is **declarative data** — the schema is in [`src/rules.js`](../src/rule
 A rule is a **saved core selector** (or a funnel slot) plus delivery + lifecycle. The engine
 (`ctx.selector`) does all the selection; this plugin just stores the selector, resolves it, and
 activates the cohort. The selector grammar — `about` / `filter` / `judge`, and the full `filter`
-boolean tree — lives in [`selector.md`](../../whitebox-pro-server/docs/selector.md); this page is the
+boolean tree — lives in [`selector.md`](../../server/docs/selector.md); this page is the
 audience-rule envelope around it.
 
 ## Shape
@@ -41,7 +41,7 @@ A rule has **exactly one source**: a `select` (a selector) **or** a `funnel` + `
 
 | field | meaning |
 |---|---|
-| `select` | a **core selector** — `{ about?, filter?, judge? }`, at least one present. Resolved by the engine. See [`selector.md`](../../whitebox-pro-server/docs/selector.md). |
+| `select` | a **core selector** — `{ about?, filter?, judge? }`, at least one present. Resolved by the engine. See [`selector.md`](../../server/docs/selector.md). |
 | `funnel` / `slot` / `status` | the other source — a funnel cohort (a step's completers or a gap). See [Funnel source](#funnel-source). |
 | `ttl_days` | how stale a match can be before keep-warm re-confirms it. Keep `< platform window`. Default `30`. |
 | `policy` | `non_sensitive` runs the sensitive-category guard ([08](08-consent-privacy.md)). `'non_sensitive'` \| `'unrestricted'`. |
@@ -55,7 +55,7 @@ selector would mean "everyone," never what an audience wants):
 - **`about`** — a short semantic topic, vector-matched. For a people cohort it *gates* at a similarity
   floor (kept everyone above it), not a top-N. Comma-separated topics work best.
 - **`filter`** — a boolean tree (`all` / `any` / `not`) of deterministic `fact` and `metric` clauses,
-  run before the LLM. **The grammar is in [`selector.md` §5](../../whitebox-pro-server/docs/selector.md)** —
+  run before the LLM. **The grammar is in [`selector.md` §5](../../server/docs/selector.md)** —
   `fact` (ops `eq/ne/in/gt/gte/lt/present`, directional dates `next/last/before`, temporal
   `changed/transition/decreased/increased`) and `metric` (windowed aggregates over awareness:
   `count` · `distinct_sessions` · `sum_dwell_ms` · `sum` · `recency_days`, with `content` / `channel` /
@@ -81,7 +81,7 @@ select: { filter: { metric: { content: 'purchase', sum: { field: 'value', gte: 1
 
 The other source is a **funnel** + a **slot** — for windowed / ordered steps (*"started a trial, then
 purchased within 14 days"*) that a single `filter` can't express. The funnel shape and resolution are
-defined in [`selector.md` §14](../../whitebox-pro-server/docs/selector.md); a rule pins it to one cohort
+defined in [`selector.md` §14](../../server/docs/selector.md); a rule pins it to one cohort
 with `slot`:
 
 ```js

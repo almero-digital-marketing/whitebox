@@ -26,11 +26,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 5273)
 const TARGET = new URL(process.env.WB_SERVER || 'http://localhost:3000')
 const TARGET_PORT = Number(TARGET.port || (TARGET.protocol === 'https:' ? 443 : 80))
-const SERVER_DIR = path.resolve(__dirname, '../../whitebox-pro-server')
+const SERVER_DIR = path.resolve(__dirname, '../../server')
 const TARGET_IS_LOCAL = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(TARGET.hostname)
 const START_SERVER = process.env.WB_START_SERVER !== '0' && TARGET_IS_LOCAL
 
-// Load whitebox-pro-server/.env into our env too, so we can inject the SAME ad-pixel
+// Load server/.env into our env too, so we can inject the SAME ad-pixel
 // ids the server uses (WB_META_PIXEL_ID / WB_GA4_MEASUREMENT_ID /
 // WB_TIKTOK_PIXEL_CODE). Best-effort — needs Node ≥20.6 and the file present.
 try { process.loadEnvFile?.(path.join(SERVER_DIR, '.env')) } catch {}
@@ -170,7 +170,7 @@ server.listen(PORT, async () => {
   console.log(`WhiteBox SaaS integration demo [auto-start server] → http://localhost:${PORT}`)
   console.log(`proxying API + WS → ${TARGET.href}`)
   console.log(PIXELS.on.length
-    ? `[demo] injecting ad pixels: ${PIXELS.on.join(', ')} (set WB_*_PIXEL_* in whitebox-pro-server/.env)`
+    ? `[demo] injecting ad pixels: ${PIXELS.on.join(', ')} (set WB_*_PIXEL_* in server/.env)`
     : '[demo] no ad pixels configured — conversions record server-side only (set WB_META_PIXEL_ID / WB_GA4_MEASUREMENT_ID / WB_TIKTOK_PIXEL_CODE to load them)')
 
   if (!START_SERVER) {

@@ -1,6 +1,6 @@
 # @whitebox/client
 
-Browser client library for [whitebox-pro-server](../whitebox-pro-server). Sits on customer websites, manages passport/session identity, ships engagement events, submits contact forms, and tracks conversions.
+Browser client library for [whitebox-pro-server](../server). Sits on customer websites, manages passport/session identity, ships engagement events, submits contact forms, and tracks conversions.
 
 ## Install
 

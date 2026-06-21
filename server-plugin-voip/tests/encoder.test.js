@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import * as encoder from '../src/encoder.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FIXTURES = path.join(__dirname, '../../whitebox-pro-server/tests/fixtures/voip')
+const FIXTURES = path.join(__dirname, '../../server/tests/fixtures/voip')
 const SAMPLE_WAV = 'sample.wav'
 
 // Re-init the module singleton with a fresh recordsFolder per test, return

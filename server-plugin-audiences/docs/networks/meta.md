@@ -1,6 +1,6 @@
 # Meta (Facebook / Instagram)
 
-Adapter: [`src/adapters/meta.js`](../../../whitebox-pro-adnetworks/src/adapters/meta.js) — **Mode A** via the Conversions API.
+Adapter: [`src/adapters/meta.js`](../../../adnetworks/src/adapters/meta.js) — **Mode A** via the Conversions API.
 
 ## Flow
 

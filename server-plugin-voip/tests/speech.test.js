@@ -6,7 +6,7 @@ import * as ai from 'whitebox-pro-server/ai'
 import * as speech from '../src/speech.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FIXTURES = path.join(__dirname, '../../whitebox-pro-server/tests/fixtures/voip')
+const FIXTURES = path.join(__dirname, '../../server/tests/fixtures/voip')
 const SAMPLE = 'sample.mp3'
 
 const context = fs.readFileSync(path.join(FIXTURES, 'speech.md'), 'utf8').trim()

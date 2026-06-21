@@ -37,7 +37,7 @@ builds and tests fine; you only need them when your config imports a provider. S
 
 ## 2. Configure the environment
 
-All secrets come from the environment. Create `whitebox-pro-server/.env` (it is
+All secrets come from the environment. Create `server/.env` (it is
 gitignored) with at least:
 
 ```bash
@@ -68,7 +68,7 @@ The server reads `whitebox.config.js` from its working directory. Copy the examp
 and trim it to the channels you want:
 
 ```bash
-cp whitebox-pro-server/whitebox.config.example.js whitebox-pro-server/whitebox.config.js
+cp server/whitebox.config.example.js server/whitebox.config.js
 ```
 
 The default export is an `async (runtime) => ({ … })` factory. A minimal config:
