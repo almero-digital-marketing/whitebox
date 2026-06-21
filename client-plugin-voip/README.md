@@ -4,7 +4,7 @@
 
 ## What it is
 
-The browser half of the [voip](../whitebox-pro-server-plugin-voip) channel. When a
+The browser half of the [voip](../server-plugin-voip) channel. When a
 phone element comes into view and the visitor looks genuinely engaged, the plugin
 asks the server for a trackable number from that line's pool, swaps it into the DOM
 (text + `tel:` href), and emits `voip.click` when the user dials. The number is
@@ -40,5 +40,5 @@ swapped-in number.
 
 ## See also
 
-- Server channel: [`whitebox-pro-server-plugin-voip`](../whitebox-pro-server-plugin-voip)
+- Server channel: [`whitebox-pro-server-plugin-voip`](../server-plugin-voip)
   (Asterisk ARI observer, number pool, recording, transcription).

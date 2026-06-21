@@ -95,21 +95,21 @@ channel is its own plug‑in package.
 | package | what it does |
 |---|---|
 | [`whitebox-pro-server`](whitebox-pro-server) | Core: HTTP server, the two customer memories (semantic + structured), the query engine, identity, sessions, MCP, plugin loader |
-| [`whitebox-pro-server-plugin-mail`](whitebox-pro-server-plugin-mail) | Email — outbound (transactional + bulk), inbound, tracking, suppressions |
-| [`whitebox-pro-server-plugin-sms`](whitebox-pro-server-plugin-sms) | SMS — send, replies, opt‑outs, delivery receipts |
-| [`whitebox-pro-server-plugin-voip`](whitebox-pro-server-plugin-voip) | Voice — call tracking, recording, transcription |
-| [`whitebox-pro-server-plugin-crm`](whitebox-pro-server-plugin-crm) | CRM — webhook ingestion of customer state into the memory |
-| [`whitebox-pro-server-plugin-engagement`](whitebox-pro-server-plugin-engagement) | Web — text / image / video engagement tracking |
-| [`whitebox-pro-server-plugin-analytics`](whitebox-pro-server-plugin-analytics) | Ask & recall over the customer memory |
-| [`whitebox-pro-server-plugin-audiences`](whitebox-pro-server-plugin-audiences) | Turn a question into a living ad‑network audience |
+| [`whitebox-pro-server-plugin-mail`](server-plugin-mail) | Email — outbound (transactional + bulk), inbound, tracking, suppressions |
+| [`whitebox-pro-server-plugin-sms`](server-plugin-sms) | SMS — send, replies, opt‑outs, delivery receipts |
+| [`whitebox-pro-server-plugin-voip`](server-plugin-voip) | Voice — call tracking, recording, transcription |
+| [`whitebox-pro-server-plugin-crm`](server-plugin-crm) | CRM — webhook ingestion of customer state into the memory |
+| [`whitebox-pro-server-plugin-engagement`](server-plugin-engagement) | Web — text / image / video engagement tracking |
+| [`whitebox-pro-server-plugin-analytics`](server-plugin-analytics) | Ask & recall over the customer memory |
+| [`whitebox-pro-server-plugin-audiences`](server-plugin-audiences) | Turn a question into a living ad‑network audience |
 
 ### Client · browser SDK
 
 | package | what it does |
 |---|---|
 | [`whitebox-pro-client`](whitebox-pro-client) | Core: transport, identity, consent, plugin host |
-| [`whitebox-pro-client-plugin-engagement`](whitebox-pro-client-plugin-engagement) | Reading / viewing / watching trackers |
-| [`whitebox-pro-client-plugin-mail`](whitebox-pro-client-plugin-mail) · [`-voip`](whitebox-pro-client-plugin-voip) · [`-conversions`](whitebox-pro-client-plugin-conversions) · [`-crm`](whitebox-pro-client-plugin-crm) | Contact forms · trackable numbers · conversion events · client observations |
+| [`whitebox-pro-client-plugin-engagement`](client-plugin-engagement) | Reading / viewing / watching trackers |
+| [`whitebox-pro-client-plugin-mail`](client-plugin-mail) · [`-voip`](client-plugin-voip) · [`-conversions`](client-plugin-conversions) · [`-crm`](client-plugin-crm) | Contact forms · trackable numbers · conversion events · client observations |
 
 ### Integrations (their own repos)
 

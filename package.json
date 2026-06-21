@@ -8,8 +8,8 @@
     "whitebox-pro-server",
     "whitebox-pro-client",
     "whitebox-pro-adnetworks",
-    "whitebox-pro-server-plugin-*",
-    "whitebox-pro-client-plugin-*"
+    "server-plugin-*",
+    "client-plugin-*"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",

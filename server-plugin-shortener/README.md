@@ -67,7 +67,7 @@ POST /claim     → validate+consume token (single-use) → HARD-BIND:
 **Hard-bind, safely:** identity is single-use and consumed **on the claim** (a real
 browser that ran JS), never on the redirect GET — so scanners/prefetchers can't
 consume or misattribute it, and forwarded links self-disarm after the first
-claim. The client SDK ([whitebox-pro-client-plugin-shortener](../whitebox-pro-client-plugin-shortener))
+claim. The client SDK ([whitebox-pro-client-plugin-shortener](../client-plugin-shortener))
 reads `?wb=`/`#wb=`, claims, scrubs the URL, and adopts the returned passport.
 
 ## Handoff — automatic

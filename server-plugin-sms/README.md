@@ -4,7 +4,7 @@
 
 ## What it is
 
-The SMS counterpart to [`whitebox-pro-server-plugin-mail`](../whitebox-pro-server-plugin-mail): outbound sending (single + bulk), inbound replies with **STOP/START opt-out**, **delivery-status (DLR) tracking**, and the two block lists every sender needs (suppressed / undeliverable). Every send and reply becomes part of the customer's awareness profile (channel `sms`).
+The SMS counterpart to [`whitebox-pro-server-plugin-mail`](../server-plugin-mail): outbound sending (single + bulk), inbound replies with **STOP/START opt-out**, **delivery-status (DLR) tracking**, and the two block lists every sender needs (suppressed / undeliverable). Every send and reply becomes part of the customer's awareness profile (channel `sms`).
 
 The **provider is pluggable and routed by destination.** The plugin owns the plumbing; provider packages own transport, webhook authenticity, and payload shapes. [`whitebox-pro-sms-twilio`](../whitebox-pro-sms-twilio) and [`whitebox-pro-sms-mobica`](../whitebox-pro-sms-mobica) ship today — and a single deployment can use **both at once**, routed by phone prefix.
 

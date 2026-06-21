@@ -5,7 +5,7 @@
 ## What it is
 
 The server side of web-engagement tracking. The browser SDK
-([`whitebox-pro-client-plugin-engagement`](../whitebox-pro-client-plugin-engagement))
+([`whitebox-pro-client-plugin-engagement`](../client-plugin-engagement))
 decides when content was *genuinely* engaged with — settled reading, image dwell,
 the video intervals actually played, a link click — and streams those events here.
 The plugin turns them into awareness (channel `web`), generating and caching the
@@ -59,6 +59,6 @@ generic.
 
 ## See also
 
-- Browser SDK: [`whitebox-pro-client-plugin-engagement`](../whitebox-pro-client-plugin-engagement)
-- Reading it back: [`whitebox-pro-server-plugin-analytics`](../whitebox-pro-server-plugin-analytics)
+- Browser SDK: [`whitebox-pro-client-plugin-engagement`](../client-plugin-engagement)
+- Reading it back: [`whitebox-pro-server-plugin-analytics`](../server-plugin-analytics)
   (`/analytics/ask`, `recall`, `timeline`)

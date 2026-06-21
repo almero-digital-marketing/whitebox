@@ -5,7 +5,7 @@
 ## What it is
 
 The landing-page half of a personalized short link. When a visitor arrives via a
-[shortener](../whitebox-pro-server-plugin-shortener) link, the server's redirect left
+[shortener](../server-plugin-shortener) link, the server's redirect left
 a single-use **claim token** in the URL (`?wb=` or `#wb=`). This plugin redeems
 it and adopts the customer it was bound to.
 

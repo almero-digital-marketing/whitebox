@@ -4,7 +4,7 @@
 
 ## What it is
 
-The browser half of the [mail](../whitebox-pro-server-plugin-mail) channel: a thin
+The browser half of the [mail](../server-plugin-mail) channel: a thin
 client that posts a contact-form submission to the server's public
 `POST /mail/inbox`. The server links the submitter to a passport, forwards the
 message to your configured company inbox, and records it in awareness as an
@@ -40,5 +40,5 @@ as JSON. Requests are queued through the client SDK like every other call.
 
 ## See also
 
-- Server channel: [`whitebox-pro-server-plugin-mail`](../whitebox-pro-server-plugin-mail)
+- Server channel: [`whitebox-pro-server-plugin-mail`](../server-plugin-mail)
   (outbound send, inbound webhooks, tracking, suppressions).

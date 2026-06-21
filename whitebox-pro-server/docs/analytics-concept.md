@@ -65,8 +65,11 @@ answer   = saved-query ref (+question) + /ask — view (prose)
 ```
 
 Saved queries are a **core primitive** (not owned by the composition plugin) so both
-**widgets and audiences reference them**. Define a query once → a chart and an
-audience can share it; edit it once → both move.
+**widgets and audiences reference them** by id. Define a query once → a chart and an
+audience can share it; **Publish** it once → both move. (A plain *edit* forks to a
+private copy first — only Publish propagates, so a chart tweak can't silently
+re-target an audience. The full draft/published **Save / Publish / Name / Revert**
+lifecycle is [saved-queries.md](saved-queries.md).)
 
 **So view→act is one move:** "make this chart's cohort an audience" = point an
 audience at the chart's already-persisted query and attach a delivery. No
@@ -124,28 +127,42 @@ The mess-preventer is one distinction: **saved ≠ named.**
 
 Naming is the *consequence* of reuse, or a deliberate choice — never the precondition.
 
+These rules are the *UI face* of the core **saved-query store** — the table, the
+draft↔published states, and the **Save / Publish / Name / Revert** lifecycle live in
+[saved-queries.md](saved-queries.md).
+
 ## 8. The composition MCP surface
 
 The analytics-UI MCP = **composition verbs** (the agent's authoring toolkit), distinct
 from core's **data verbs**:
 
-- `create_chart({ query, presentation, title })` · `create_answer({ question, scope? })`
-- `add_to_report` · `arrange` · `create_report` / `update_report`
-- `review(report)` — re-run the author pass (§6)
-- `save_query_to_library({ query, name, tags })` — promote (B2)
-- `make_audience({ query, delivery })` — the view→act bridge (calls audiences)
+- **author** — `create_chart({ query, presentation, title })` ·
+  `create_answer({ question, scope? })` · `add_to_report` · `arrange` ·
+  `create_report` / `update_report` · `review(report)` — re-run the author pass (§6)
+- **query lifecycle** — thin calls to the four core verbs in
+  [saved-queries](saved-queries.md):
+  - `save_draft({ widget, def })` → **Save** a private draft (forks if the widget was
+    bound to a named query)
+  - `publish_query({ draft })` → **Publish** — update the source named query, propagate
+  - `name_query({ draft, name, tags? })` → **Name** — promote a draft to a new library
+    query *(was `save_query_to_library`; B2)*
+  - `revert_query({ draft })` → **Revert** — discard the draft
+  - `remove({ report | thread })` — prune the rail; never cascades (§12). Named-query
+    deletion is the guarded core `delete`, not a composition verb.
+- **act** — `make_audience({ query, delivery })` — the view→act bridge (calls audiences)
 
-Data verbs (`query` / `preview` / `ask`) come from **core**. The agent **searches
-saved queries before creating** (dedup, §7).
+Data verbs (`query` / `preview` / `ask`) come from **core**. The agent **searches saved
+queries before creating** (dedup, §7).
 
 ## 9. v1 scope
 
-**In v1:** store reports/widgets, the composition MCP, live charts, the Review button.
-Single-user, no permissions.
+**In v1:** store reports/widgets, the composition MCP, live charts, the Review button,
+and a **read-only live Share link** (aggregates-only; §12). Single editor, no accounts.
 
 **Out (v2):**
 - **Scheduled reports** — fire `review` on a cadence (→ notify / email).
-- **Shared / permissioned reports** — sharing + access control.
+- **Permissioned / team sharing** — accounts, roles, edit-sharing, and PII for authed
+  viewers (the v1 Share link is anonymous + aggregates-only).
 
 Both bolt on later without touching the model.
 
@@ -174,7 +191,71 @@ QUERY, and any cohort on it is one move from an audience. It's the concrete form
 *"analytics becomes the UI"* — the composition layer, owning composition state and
 nothing else.
 
-## 12. Stack (v1)
+## 12. The UI — the three-pane console
+
+The composition workflow (§5) takes the shape of an **AI-agent console**: three panes,
+each a distinct job.
+
+```
+┌─────────────┬───────────────────────────┬──────────────────┐
+│  reports    │   compose  ⇆  edit        │   board          │
+│  (left)     │   (center)                │   (right)        │
+│  · saved    │  chat: ask → AI assembles │  pinned widgets  │
+│    reports  │  answers + charts inline, │  on a grid;      │
+│  · recent   │  newest open, older       │  live charts;    │
+│    threads  │  collapsed                │  the durable     │
+│             │   ── or ──                │  artifact        │
+│             │  the widget EDITOR        │  [ Share ]       │
+└─────────────┴───────────────────────────┴──────────────────┘
+```
+
+- **Left — reports.** Saved reports + **recent threads** (a report is *named*; a recent
+  thread *saved-but-unnamed* — the **saved ≠ named** rule again, §7, so nothing clutters
+  the catalog until you name it). A **Remove** action prunes the rail — the antidote to
+  junk-drawer creep. Removing a report or thread drops it and **GCs its private draft
+  queries**, but **never** the named queries it referenced or the audiences depending on
+  them — removal stops at the report boundary. (A report with a live Share link warns
+  first: removing it kills the link. Deleting a *named* query is a separate, guarded
+  library action — not a rail swipe — since an audience may depend on it.)
+- **Center — compose ⇆ edit.** Two modes, one pane. By default the **chat**: you ask,
+  the AI assembles answers + charts (§5), newest expanded, older collapsed. Click
+  **edit** on a board widget and the pane becomes that widget's **editor** — change
+  query / presentation directly (the non-conversational path), carrying the
+  draft/published badge and **Save · Publish · Name · Revert**
+  ([saved-queries](saved-queries.md)). *Chat to create, editor to adjust.*
+- **Right — the board.** The durable artifact: pinned widgets on a draggable grid (the
+  `arrange` verb, §8). **Charts are live** (§6); **prose stays in the thread** — an
+  answer reaches the board only as a *live* answer widget (refreshed on Review, §6),
+  never a frozen snapshot, so the board never shows a stale narrative beside fresh
+  numbers.
+
+**The thread is saved** — it's part of the report, not throwaway. Reopening a report
+restores its board *and* the conversation that built it.
+
+### Share — a live, read-only board link
+
+The board carries a **Share** action: a token link that renders the board **live**
+(charts keep updating) and **read-only** — no chat, no editor, no **act** buttons. It's
+the *view* surface the chat-centric console isn't: send it, the recipient watches the
+numbers move.
+
+**Aggregates only on an open link.** A shared link shows **charts and stats**; a
+**cohort table is real people** (names, emails), so those widgets are **hidden** on an
+open link and *"create audience"* never renders. PII-bearing widgets require an
+**authed** viewer. This is the one place a forwarded URL could leak customers —
+designed out from the start.
+
+This pulls a *read-only* share into **v1**; full **permissioned / team** sharing stays
+**v2** (§9), and bolts on without changing the model.
+
+### Open edges (not v1-blocking)
+
+- **Responsive / mobile** — three panes don't fit a phone; a small-screen layout
+  (board-first, chat as a sheet) is a later pass.
+- **Left-rail load** — reports + recent threads + the named-query library all share the
+  left rail; watch it for junk-drawer creep as the set grows.
+
+## 13. Stack (v1)
 
 Backend and AI **reuse the existing server stack**; only the frontend is new.
 

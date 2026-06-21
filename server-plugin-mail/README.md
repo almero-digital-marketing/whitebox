@@ -216,7 +216,7 @@ A provider without `sendBatch` keeps the original one-job-per-recipient fan-out.
 
 ### Personalized short links
 
-If the [shortener](../whitebox-pro-server-plugin-shortener) plugin is loaded, links in the HTML body marked with **`data-wb-shorten`** are rewritten at send time — once the recipient's passport is resolved — into per-recipient short links bound to that passport, with UTM baked into the destination. Clicking hard-binds the clicker to the recipient and 302s to the original URL (with the UTMs; claim token in the fragment).
+If the [shortener](../server-plugin-shortener) plugin is loaded, links in the HTML body marked with **`data-wb-shorten`** are rewritten at send time — once the recipient's passport is resolved — into per-recipient short links bound to that passport, with UTM baked into the destination. Clicking hard-binds the clicker to the recipient and 302s to the original URL (with the UTMs; claim token in the fragment).
 
 Author a link:
 ```html

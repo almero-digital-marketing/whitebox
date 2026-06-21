@@ -514,7 +514,7 @@ Keep these endpoints separate from the retrieval primitives so consumers can pic
 ## Ad-network reporting
 
 Analytics is purely query/recall over awareness. **Conversion reporting to the ad
-networks moved to [`whitebox-pro-server-plugin-conversions`](../whitebox-pro-server-plugin-conversions)**,
+networks moved to [`whitebox-pro-server-plugin-conversions`](../server-plugin-conversions)**,
 which receives `/conversions/events` and fans out to composed network packages
 (`whitebox-pro-adnetworks-meta` / `-google` / `-tiktok`), deduped against the browser
 pixels by `event_id`.

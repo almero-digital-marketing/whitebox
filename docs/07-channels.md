@@ -40,7 +40,7 @@ click → `expression`; inbound reply / form → `expression`.
 with `data-wb-shorten` and it becomes a per-recipient shortener link). MCP:
 `mail.send`, `mail.outbox_get`, `mail.inbox_list`, `mail.suppress`/`unsuppress`.
 
-→ [`whitebox-pro-server-plugin-mail`](../whitebox-pro-server-plugin-mail) ·
+→ [`whitebox-pro-server-plugin-mail`](../server-plugin-mail) ·
 providers: [mailgun](08-integrations.md), [postmark](08-integrations.md).
 
 ---
@@ -73,7 +73,7 @@ suppresses; `START` un-suppresses. **Awareness:** send → `exposure`, inbound �
 `expression`. MCP: `sms.send`, `sms.outbox_get`, `sms.inbox_list`,
 `sms.suppress`/`unsuppress`.
 
-→ [`whitebox-pro-server-plugin-sms`](../whitebox-pro-server-plugin-sms) · providers:
+→ [`whitebox-pro-server-plugin-sms`](../server-plugin-sms) · providers:
 twilio, mobica (incl. multi-instance DLR fan-out).
 
 ---
@@ -102,7 +102,7 @@ client plugin instruments the page automatically (`data-wb-text`, `data-wb-image
 videos, `a[href]`). MCP: `engagement.list_content`, `get_content`,
 `invalidate_content`.
 
-→ [`whitebox-pro-server-plugin-engagement`](../whitebox-pro-server-plugin-engagement)
+→ [`whitebox-pro-server-plugin-engagement`](../server-plugin-engagement)
 · client: `whitebox-pro-client-plugin-engagement`.
 
 ---
@@ -136,7 +136,7 @@ notes → channel `crm`, direction `observation`. The browser client plugin
 `crm.get_state` (current `{ key: value }` facts; for history/transitions/cross-customer
 use the core `whitebox.query`). The old `whitebox_crm_records` table was dropped.
 
-→ [`whitebox-pro-server-plugin-crm`](../whitebox-pro-server-plugin-crm).
+→ [`whitebox-pro-server-plugin-crm`](../server-plugin-crm).
 
 ---
 
@@ -168,7 +168,7 @@ in one doesn't lose the call). Notify topics `voip.ring`/`pick`/`call`. Requires
 ARI setup (see the package README). MCP: `voip.list_calls`, `get_call`,
 `get_transcript`.
 
-→ [`whitebox-pro-server-plugin-voip`](../whitebox-pro-server-plugin-voip) · client:
+→ [`whitebox-pro-server-plugin-voip`](../server-plugin-voip) · client:
 `whitebox-pro-client-plugin-voip` (number swap-in via `data-wb-phone`).
 
 ---
@@ -202,7 +202,7 @@ GA4 has no `gtag`↔Measurement-Protocol dedup, so run it on **one side only**
 are schema-validated; custom events pass through. With no networks, conversions still
 record to awareness (`conversion`). MCP: `conversions.list_events`.
 
-→ [`whitebox-pro-server-plugin-conversions`](../whitebox-pro-server-plugin-conversions)
+→ [`whitebox-pro-server-plugin-conversions`](../server-plugin-conversions)
 · client: `whitebox-pro-client-plugin-conversions` · networks: [Integrations](08-integrations.md).
 
 ---
@@ -251,8 +251,8 @@ and deliveries — e.g. `POST /audiences/rules`, `…/rules/:id/preview`,
 
 The audiences package ships a full multi-chapter guide of its own.
 
-→ [`whitebox-pro-server-plugin-audiences`](../whitebox-pro-server-plugin-audiences) ·
-its [docs/](../whitebox-pro-server-plugin-audiences/docs).
+→ [`whitebox-pro-server-plugin-audiences`](../server-plugin-audiences) ·
+its [docs/](../server-plugin-audiences/docs).
 
 ---
 
@@ -278,7 +278,7 @@ shortener({
 and binds the visitor to the passport. MCP: `shortener.create_link`, `list_links`,
 `link_stats`.
 
-→ [`whitebox-pro-server-plugin-shortener`](../whitebox-pro-server-plugin-shortener).
+→ [`whitebox-pro-server-plugin-shortener`](../server-plugin-shortener).
 
 ---
 
