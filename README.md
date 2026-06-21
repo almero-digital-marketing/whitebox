@@ -2,75 +2,150 @@
   <img src="whitebox.svg" alt="WhiteBox" width="320" />
 </p>
 
-<p align="center"><strong>The AI-native marketing data brain.</strong></p>
+<p align="center"><strong>Know each customer like a person — not a pile of disconnected analytics.</strong></p>
 
 # WhiteBox
 
-**WhiteBox is a channel backend with memory.** Record every customer touch — email, voice call, web engagement, CRM event — against one identity, embed it into a per-customer semantic store, and ask grounded questions about it in natural language.
+WhiteBox builds **one living memory of every customer** — everything they read on your
+site, every email they opened, every call they had, every text, plus their current state
+in your CRM — all tied to a single person. Then it lets you **ask plain‑language questions
+about your customers and turn the answers into audiences and action.**
 
-📖 **[Documentation](docs/)** — operator & integrator guide: [overview](docs/01-overview.md) · [concepts](docs/02-concepts.md) · [getting started](docs/03-getting-started.md) · [configuration](docs/04-configuration.md) · [awareness & querying](docs/05-awareness-and-querying.md) · [MCP](docs/06-mcp.md) · [channels](docs/07-channels.md) · [integrations](docs/08-integrations.md) · [deployment](docs/09-deployment.md).
+No more stitching together a pixel that sees one session, an email tool that sees opens,
+a call log that sees calls, and a CRM that sees deals. WhiteBox keeps the whole picture of
+each person in one place, and makes it answerable.
 
-## Where it fits
+> You target on **understanding** — and every person an answer surfaces comes with a
+> plain, human‑readable *"why."* Nothing is a black‑box guess.
 
-WhiteBox is a focused component, not your whole backend. It owns customer touchpoints and the memory of them: defined surface, channel-shaped responsibilities. Your app code lives separately and reaches in through HTTP or MCP — it never imports WhiteBox internals.
+---
 
-## Why WhiteBox
+## What you can ask
 
-- **One identity across channels.** Email, phone, fingerprint and login all merge into a single **passport**, so a call, a click and a reply belong to the same person.
-- **Memory you can query.** Every touch is embedded into an **awareness** store. Identical content embeds once (`content_hash`) and is shared across customers at query time — `/analytics/ask` answers in natural language, grounded in what actually happened.
-- **LLM-native.** The same data is reachable over **MCP**, so an agent can read timelines, recall context, and act through WhiteBox's tools directly.
-- **Channels are plugins.** Each channel is its own npm package that registers against the core `ctx`. Plugins never import each other; adding a channel is a new package, not a core change.
+Ask in plain language. A few examples of what WhiteBox can answer:
 
-## Channels
+**🧑 Understand one customer**
+- *"What does this customer care about? Have they raised any concerns?"*
+- *"Brief me on this account before the call — what have we talked about?"*
 
-This is a monorepo (npm workspaces) — each package publishes independently.
+**🎯 Find the right people (and turn them into an audience)**
+- *"Who's at risk of churning?"*
+- *"Which Pro customers have been reading about competitors?"*
+- *"Everyone who visited pricing twice in the last 30 days but hasn't bought."*
+- *"Who downgraded their plan after a support call?"*
+
+**📉 Spot where people drop off**
+- *"Who started a trial and activated, but didn't purchase within 14 days?"*
+- *"Who's stuck halfway through onboarding right now?"*
+
+**📈 See the big picture**
+- *"What are customers asking about most this month?"*
+- *"Purchases per week."*  ·  *"Engagement by channel."*  ·  *"How many people heard about the new feature?"*
+
+---
+
+## What you do with the answers
+
+- **Get a grounded answer.** A plain‑language summary you can drop into a dashboard or a
+  *"brief me on this customer"* button — citing the actual email, call or page it came
+  from, never an invented guess.
+- **Build an audience.** Turn any of those questions into a living segment and push it to
+  **Meta, TikTok or Google** to retarget. It **keeps itself warm**: as people qualify they
+  join, and a win‑back audience *empties itself* as they convert.
+- **Let your AI assistant do it.** Everything is reachable by an AI agent (over MCP), so an
+  assistant can pull a customer's history, answer, and act — all on the same memory.
+
+---
+
+## Where the data comes from
+
+Switch on the channels you use; each one quietly feeds the same per‑customer memory:
+
+| | channel | what it remembers |
+|---|---|---|
+| 🌐 | **Web** | what each visitor actually read, watched and engaged with — not just page views |
+| ✉️ | **Email** | sends, opens, clicks and replies (transactional + bulk) |
+| 💬 | **SMS** | sends, replies, opt‑outs |
+| 📞 | **Voice** | inbound calls matched back to the visitor, recorded and transcribed |
+| 🗂️ | **CRM** | subscriptions, deals, plan, status — the structured state from whatever systems you already run |
+
+Everyone is **one identity**: an email, a phone number, a login and a web visit all merge
+into a single customer, so a call, a click and a reply belong to the same person.
+
+---
+
+## In one picture
+
+```
+   web · email · sms · voice · crm
+              │   every touch, tied to one customer
+              ▼
+        one customer memory
+              │   ask in plain language
+        ┌─────┴───────────────┬───────────────────┐
+        ▼                     ▼                   ▼
+   an answer            an audience            a trend
+   (grounded,        (pushed to Meta /        (chart over
+    cited)            TikTok / Google,         your base)
+                      self‑updating)
+```
+
+---
+
+## Want the details?
+
+**Operators & marketers:** start with the **[documentation](docs/)** —
+[overview](docs/01-overview.md) · [core ideas](docs/02-concepts.md) ·
+[getting started](docs/03-getting-started.md) ·
+[asking & querying](docs/05-awareness-and-querying.md) ·
+[channels](docs/07-channels.md).
+
+**Developers:** WhiteBox is a focused backend you reach over **HTTP or MCP** — it owns
+customer touchpoints and the memory of them; your app stays separate and never imports its
+internals. It's an npm‑workspaces monorepo (Node · Express · Postgres + pgvector); each
+channel is its own plug‑in package.
+
+<details>
+<summary><strong>Packages & connectors</strong></summary>
 
 ### Server · Node.js · Express · BullMQ · Postgres + pgvector
 
 | package | what it does |
 |---|---|
-| [`whitebox-pro-server`](whitebox-pro-server) | Core: HTTP server, awareness, passports, sessions, MCP, plugin loader |
-| [`whitebox-pro-server-plugin-mail`](whitebox-pro-server-plugin-mail) | Outbound (transactional + bulk), inbound (form + provider webhook), tracking, suppressions — pluggable provider |
-| [`whitebox-pro-server-plugin-voip`](whitebox-pro-server-plugin-voip) | Asterisk ARI observer, recording, Whisper transcription, trackable-number pool |
-| [`whitebox-pro-server-plugin-crm`](whitebox-pro-server-plugin-crm) | Webhook ingestion of records + facts from external systems |
-| [`whitebox-pro-server-plugin-engagement`](whitebox-pro-server-plugin-engagement) | Text / image / video engagement fed into awareness |
-| [`whitebox-pro-server-plugin-analytics`](whitebox-pro-server-plugin-analytics) | Recall, population, timeline, grounded `ask`, context inspection |
+| [`whitebox-pro-server`](whitebox-pro-server) | Core: HTTP server, the two customer memories (semantic + structured), the query engine, identity, sessions, MCP, plugin loader |
+| [`whitebox-pro-server-plugin-mail`](whitebox-pro-server-plugin-mail) | Email — outbound (transactional + bulk), inbound, tracking, suppressions |
+| [`whitebox-pro-server-plugin-sms`](whitebox-pro-server-plugin-sms) | SMS — send, replies, opt‑outs, delivery receipts |
+| [`whitebox-pro-server-plugin-voip`](whitebox-pro-server-plugin-voip) | Voice — call tracking, recording, transcription |
+| [`whitebox-pro-server-plugin-crm`](whitebox-pro-server-plugin-crm) | CRM — webhook ingestion of customer state into the memory |
+| [`whitebox-pro-server-plugin-engagement`](whitebox-pro-server-plugin-engagement) | Web — text / image / video engagement tracking |
+| [`whitebox-pro-server-plugin-analytics`](whitebox-pro-server-plugin-analytics) | Ask & recall over the customer memory |
+| [`whitebox-pro-server-plugin-audiences`](whitebox-pro-server-plugin-audiences) | Turn a question into a living ad‑network audience |
 
-### Client · browser SDK · tsup · vitest
+### Client · browser SDK
 
 | package | what it does |
 |---|---|
-| [`whitebox-pro-client`](whitebox-pro-client) | Core: transport, identity, consent, event emitter, plugin host |
-| [`whitebox-pro-client-plugin-mail`](whitebox-pro-client-plugin-mail) | Contact-form submission |
-| [`whitebox-pro-client-plugin-voip`](whitebox-pro-client-plugin-voip) | Trackable phone-number swap-in |
+| [`whitebox-pro-client`](whitebox-pro-client) | Core: transport, identity, consent, plugin host |
 | [`whitebox-pro-client-plugin-engagement`](whitebox-pro-client-plugin-engagement) | Reading / viewing / watching trackers |
-| [`whitebox-pro-client-plugin-conversions`](whitebox-pro-client-plugin-conversions) | Conversion events |
+| [`whitebox-pro-client-plugin-mail`](whitebox-pro-client-plugin-mail) · [`-voip`](whitebox-pro-client-plugin-voip) · [`-conversions`](whitebox-pro-client-plugin-conversions) · [`-crm`](whitebox-pro-client-plugin-crm) | Contact forms · trackable numbers · conversion events · client observations |
 
-## Integrations
+### Integrations (their own repos)
 
-Third-party adapters live in **their own repos**, not this monorepo. Each is a self-contained package that composes into config like a plugin — ad networks (Meta/Google/TikTok Conversions APIs + pixels), mail providers (Mailgun/Postmark), SMS providers (Twilio/Mobica), and MCP auth providers (Auth0 and other OAuth resource-server verifiers):
-
-| package | composes into | what it does |
-|---|---|---|
-| `whitebox-pro-adnetworks-meta` · `-google` · `-tiktok` | `conversions({ networks: […] })` | server CAPI fan-out (`.`) + browser pixel (`/client`), deduped by `event_id` |
-| `whitebox-pro-mail-mailgun` · `whitebox-pro-mail-postmark` | `mail({ provider: … })` | send + transport, inbound/tracking webhook parsing, webhook signature verification |
-| `whitebox-pro-sms-twilio` · `whitebox-pro-sms-mobica` | `sms({ provider: …, routes: {…} })` | send + DLR/inbound webhook parsing, signature verification; routed per destination prefix |
-| `whitebox-pro-auth-auth0` | `mcp: { auth: auth0({…}) }` | JWT/OAuth verifier for the `/mcp` endpoint + RFC 9728 discovery |
-
-The shared kernel [`whitebox-pro-adnetworks`](whitebox-pro-adnetworks) (zod schemas, canonical events, identity helpers), the mail and SMS plugins' provider seams, and the pluggable MCP auth seam in [`whitebox-pro-server`](whitebox-pro-server) stay in-tree; only the provider specifics live outside.
-
-Integrations live in a **sibling directory outside the monorepo** (default `../whitebox-pro-integrations/`, override with `WB_INTEGRATIONS_DIR`) so they're never part of the monorepo's working tree or git. Clone the ones you need there, then link them in:
+Ad networks (Meta / Google / TikTok), email providers (Mailgun / Postmark), SMS providers
+(Twilio / Mobica) and MCP auth (Auth0) live in **their own repos** outside this monorepo and
+compose into config like a plugin. They live in a sibling directory (default
+`../whitebox-pro-integrations/`, override with `WB_INTEGRATIONS_DIR`); clone the ones you
+need and link them:
 
 ```bash
 git clone <integration-repo> ../whitebox-pro-integrations/whitebox-pro-adnetworks-meta
-npm install          # `postinstall` runs scripts/link-integrations.sh
-# or re-link any time without a full install:
-npm run link:integrations
+npm install          # postinstall links present integrations; a no-op when there are none
 ```
 
-`scripts/link-integrations.sh` symlinks each present integration into `node_modules` (bridging the `whitebox-pro-adnetworks` kernel into the ad-network packages, which is their only unpublished dependency). It's idempotent and a no-op when the directory is absent — a clone with no integrations builds and tests fine; only example configs that import a provider need it present.
+</details>
 
-## Develop
+<details>
+<summary><strong>Develop</strong></summary>
 
 ```bash
 npm install          # one install wires every workspace (no npm link)
@@ -78,7 +153,13 @@ npm test             # run all package suites
 npm test --workspace=whitebox-pro-server-plugin-mail   # one package
 ```
 
-Tests spin up a throwaway Neon branch per run — copy `.env.test.example` to `.env.test` and fill in your Neon credentials. Server runtime config lives in `whitebox-pro-server/whitebox.config.js` (copy from `whitebox.config.example.js`). Both are gitignored — never commit real secrets.
+Tests spin up a throwaway Neon branch per run — copy `.env.test.example` to `.env.test`.
+Server runtime config lives in `whitebox-pro-server/whitebox.config.js` (copy from
+`whitebox.config.example.js`). Both are gitignored — never commit real secrets.
+
+Full operator & integrator guide: **[docs/](docs/)**.
+
+</details>
 
 ## License
 
