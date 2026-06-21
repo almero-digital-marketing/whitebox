@@ -94,7 +94,7 @@ channel is its own plug‑in package.
 
 | package | what it does |
 |---|---|
-| [`whitebox-pro-server`](whitebox-pro-server) | Core: HTTP server, the two customer memories (semantic + structured), the query engine, identity, sessions, MCP, plugin loader |
+| [`whitebox-pro-server`](server) | Core: HTTP server, the two customer memories (semantic + structured), the query engine, identity, sessions, MCP, plugin loader |
 | [`whitebox-pro-server-plugin-mail`](server-plugin-mail) | Email — outbound (transactional + bulk), inbound, tracking, suppressions |
 | [`whitebox-pro-server-plugin-sms`](server-plugin-sms) | SMS — send, replies, opt‑outs, delivery receipts |
 | [`whitebox-pro-server-plugin-voip`](server-plugin-voip) | Voice — call tracking, recording, transcription |
@@ -107,7 +107,7 @@ channel is its own plug‑in package.
 
 | package | what it does |
 |---|---|
-| [`whitebox-pro-client`](whitebox-pro-client) | Core: transport, identity, consent, plugin host |
+| [`whitebox-pro-client`](client) | Core: transport, identity, consent, plugin host |
 | [`whitebox-pro-client-plugin-engagement`](client-plugin-engagement) | Reading / viewing / watching trackers |
 | [`whitebox-pro-client-plugin-mail`](client-plugin-mail) · [`-voip`](client-plugin-voip) · [`-conversions`](client-plugin-conversions) · [`-crm`](client-plugin-crm) | Contact forms · trackable numbers · conversion events · client observations |
 
@@ -136,7 +136,7 @@ npm test --workspace=whitebox-pro-server-plugin-mail   # one package
 ```
 
 Tests spin up a throwaway Neon branch per run — copy `.env.test.example` to `.env.test`.
-Server runtime config lives in `whitebox-pro-server/whitebox.config.js` (copy from
+Server runtime config lives in `server/whitebox.config.js` (copy from
 `whitebox.config.example.js`). Both are gitignored — never commit real secrets.
 
 Full operator & integrator guide: **[docs/](docs/)**.

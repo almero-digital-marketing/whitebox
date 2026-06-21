@@ -72,7 +72,7 @@ outside development.
 ## Secrets
 
 Everything sensitive is an environment variable (`WB_*`), loaded from
-`whitebox-pro-server/.env` (gitignored) or your orchestrator's secret store. The
+`server/.env` (gitignored) or your orchestrator's secret store. The
 tracked config files contain no secrets. `whitebox.config.js` (your live wiring) is
 also gitignored. Rotate provider tokens through the environment; no code change is
 needed.

@@ -10,7 +10,7 @@ Browser side of conversion tracking. Each call does two things under one shared
 1. **fires the browser pixels** present on the page (`fbq` / `gtag` / `ttq`), and
 2. **POSTs to whitebox-pro-server** (`/conversions/events`), which records the event
    into awareness and fans out the server-side hits (Meta CAPI / TikTok Events
-   API) via [`whitebox-pro-adnetworks`](../whitebox-pro-adnetworks).
+   API) via [`whitebox-pro-adnetworks`](../adnetworks).
 
 The pixel base snippets are **loaded + init'd elsewhere** (your page / GTM / a
 consent-mode loader) — this plugin never loads or `init`s them, it only fires

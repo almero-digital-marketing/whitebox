@@ -38,7 +38,7 @@ async function loadConfig() {
   }
 
   // 2. whitebox-pro-server's config in the sibling repo.
-  const cfgPath = path.resolve(__dirname, '../../whitebox-pro-server/whitebox.config.js')
+  const cfgPath = path.resolve(__dirname, '../../server/whitebox.config.js')
   if (!fs.existsSync(cfgPath)) {
     throw new Error(`Couldn't find whitebox.config.js at ${cfgPath}. Set ARI_URL / ARI_USER / ARI_PASS to override.`)
   }

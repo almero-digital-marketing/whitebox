@@ -28,7 +28,7 @@ traffic to the server. The proxy is what makes it work without touching the serv
    npm install
    npm run build --workspace=whitebox-pro-client     # produces whitebox-pro-client/dist
    ```
-2. **Redis running locally** and `whitebox-pro-server/.env` filled in (copy from `.env.example`) with
+2. **Redis running locally** and `server/.env` filled in (copy from `.env.example`) with
    DB, OpenAI key, and `WB_ENGAGEMENT_TOKEN` / `WB_ANALYTICS_TOKEN`. `whitebox.config.js` must have
    `engagement` + `analytics` in `plugins`.
 

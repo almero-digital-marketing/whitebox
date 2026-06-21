@@ -1,6 +1,6 @@
 # Google (via GA4)
 
-Adapter: [`src/adapters/google.js`](../../../whitebox-pro-adnetworks/src/adapters/google.js) — **Mode A** via the GA4
+Adapter: [`src/adapters/google.js`](../../../adnetworks/src/adapters/google.js) — **Mode A** via the GA4
 **Measurement Protocol**. GA4 is the common denominator: to do almost anything in Google Ads/DV360 you
 route through GA4 audiences.
 

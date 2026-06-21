@@ -3,7 +3,7 @@
 All three networks use **Mode A**: WhiteBox fires a custom event, the platform builds the audience.
 Each network is an **adapter** — data plus one method.
 
-> The adapters live in the shared **[`whitebox-pro-adnetworks`](../../../whitebox-pro-adnetworks)** package, not
+> The adapters live in the shared **[`whitebox-pro-adnetworks`](../../../adnetworks)** package, not
 > in this plugin — they're the ad-network *transport*, reused by `analytics` to report standard
 > conversion events (`purchase`, `lead`, …). This plugin just fires **custom** events through them.
 > See that package's README for the contract + standard-event taxonomy.
@@ -31,7 +31,7 @@ Each network is an **adapter** — data plus one method.
   `ids` `{ email_sha256, phone_sha256, external_id, signals, ip?, user_agent? }`.
 
 Add a network = add an adapter factory in
-[`whitebox-pro-adnetworks/src/adapters/`](../../../whitebox-pro-adnetworks/src/adapters), register it there,
+[`whitebox-pro-adnetworks/src/adapters/`](../../../adnetworks/src/adapters), register it there,
 and write a `docs/networks/<net>.md`.
 
 ## Eligibility

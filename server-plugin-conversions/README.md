@@ -8,7 +8,7 @@ Server side of conversion tracking. Receives standard/custom conversion events
 from the browser ([`whitebox-pro-client-plugin-conversions`](../client-plugin-conversions)),
 records each as a first-party **awareness** signal, and — consent permitting —
 fans it out to the ad networks (Meta CAPI / GA4 MP / TikTok Events API) through
-the shared [`whitebox-pro-adnetworks`](../whitebox-pro-adnetworks) adapters, **deduped
+the shared [`whitebox-pro-adnetworks`](../adnetworks) adapters, **deduped
 against the browser pixels by `event_id`**.
 
 ## Config
