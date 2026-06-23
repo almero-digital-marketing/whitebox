@@ -28,7 +28,7 @@ const querySchema = z.object({
   passport:   z.string().optional(),                                 // knowledge·passport
   asOf:       z.string().optional(),
   limit:      z.number().int().positive().max(1000).optional(),
-  group:      z.object({ by: z.string() }).optional(),               // §7 — time-series / breakdown over selector.filter.metric
+  group:      z.object({ by: z.string(), limit: z.number().int().positive().max(1000).optional() }).optional(), // §7 — time-series / breakdown (limit = top-N guardrail for high-card keys)
 })
 
 const previewSchema = z.object({

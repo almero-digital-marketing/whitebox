@@ -45,17 +45,19 @@ export async function resolveKnowledge(selector, { scope, passport, asOf, limit 
 }
 
 // group(selector, { group, scope, asOf }) → a time-series / breakdown series (§7):
-// the `metric` aggregate in selector.filter, bucketed by `group.by` (a time grain
-// — hour/day/week/month — or a dimension — channel/direction/source/content).
+// the `metric` aggregate in selector.filter, bucketed by `group.by` — a time grain
+// (hour/day/week/month), an exposure column (channel/direction/source), a session
+// dimension (session:utm_campaign), or a meta attribute (attr:event).
 // Returns [{ bucket, value }]. Unlike a people resolve this is the TOTAL aggregate,
-// optionally restricted to a caller-provided scope (e.g. a cohort's ids). This is
-// the one engine capability charts add; everything else is composition.
+// optionally restricted to a caller-provided scope (e.g. a cohort's ids), and
+// optionally capped to the top-N buckets by value via `group.limit` (the
+// high-cardinality guardrail). The one engine capability charts add.
 export async function resolveGroup(selector, { group, scope, asOf } = {}) {
   const m = selector?.filter?.metric
   if (!m) throw new Error('selector: `group` requires a single `metric` filter (the aggregate to bucket)')
   const at = asOf ? new Date(asOf) : null
   const scopeArr = scope == null ? null : [].concat(scope)
-  return metric.group(rt.db, m, { by: group?.by, at, scope: scopeArr })
+  return metric.group(rt.db, m, { by: group?.by, limit: group?.limit, at, scope: scopeArr })
 }
 
 // A minimal ctx for evaluating a `filter` over the whole base (knowledge cohort).

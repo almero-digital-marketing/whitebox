@@ -28,9 +28,12 @@ export function registerMcp(ctx, { selector }) {
       '"people" returns the matching cohort { count, passports }. ' +
       'about = semantic narrow (gates people / ranks knowledge); filter = a boolean tree of fact + metric clauses; ' +
       'judge = an LLM membership predicate (people only). asOf time-travels the deterministic filter. ' +
-      'Pass group: { by } to get a time-series / breakdown series [{ bucket, value }] instead — it buckets the ' +
-      'selector.filter.metric aggregate by a time grain (hour/day/week/month) or a dimension ' +
-      '(channel/direction/source/content); use it for trend + breakdown charts. ' +
+      'Pass group: { by, limit? } to get a time-series / breakdown series [{ bucket, value }] instead — it buckets the ' +
+      'selector.filter.metric aggregate by a time grain (hour/day/week/month), an exposure column ' +
+      '(channel/direction/source), a session UTM dimension (session:utm_campaign), or a meta attribute ' +
+      '(attr:event); use it for trend + breakdown charts. group.limit caps to the top-N buckets by value ' +
+      '(use it for high-cardinality keys). Filter the same dimensions in filter.metric via ' +
+      'session:{utm_campaign:…} and attrs:{event:…}. ' +
       'This tool RETRIEVES — it never writes prose. To answer a natural-language question, query "knowledge" and ' +
       'synthesize the answer yourself from the returned evidence (there is no ask tool by design). ' +
       'For people, run whitebox.preview first to see the judge cost.',
@@ -41,7 +44,7 @@ export function registerMcp(ctx, { selector }) {
       passport:   z.string().optional(),
       asOf:       z.string().optional(),
       limit:      z.number().int().positive().max(1000).optional(),
-      group:      z.object({ by: z.string() }).optional(),
+      group:      z.object({ by: z.string(), limit: z.number().int().positive().max(1000).optional() }).optional(),
     },
     handler: async ({ selector: sel = {}, ...opts }) => json(await selector.resolve(sel, opts)),
   })

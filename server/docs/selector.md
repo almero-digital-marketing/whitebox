@@ -124,17 +124,35 @@ filter = clause | { all: [filter…] } | { any: [filter…] } | { not: filter }
 `eq/ne/in/gt/lt/present`, directional date `next/last/before`, and temporal
 `changed/transition/decreased/increased`.
 
-**`metric`** — `{ metric: { content?, channel?, last?, <agg> } }`, where `<agg>`
-is `count` · `distinct_sessions` · `sum_dwell_ms` · `recency_days` · **`sum`** and
-`last` is the lookback window:
+**`metric`** — `{ metric: { channel?, direction?, session?, attrs?, last?, <agg> } }`,
+where `<agg>` is `count` · `distinct_sessions` · `sum_dwell_ms` · `recency_days` ·
+**`sum`** and `last` is the lookback window. The event is sliced by its dimensions'
+**natural typed homes** (see [event-attributes.md](event-attributes.md)):
+
+| dimension | filter key | reads |
+|---|---|---|
+| event basics | `channel` · `direction` | exposure columns (equality) |
+| acquisition | `session: { utm_campaign: … }` | `whitebox_sessions` via `session_id` join (typed UTM columns) |
+| open per-event dims | `attrs: { event: "email_open" }` | `meta` jsonb — `=`, `{ in: [...] }`, `{ present: true }` (key + value bound) |
 
 ```js
-{ metric: { content: "purchase", sum: { field: "value", gte: 500 } } }               // lifetime spend ≥ $500
-{ metric: { content: "purchase", sum: { field: "value", gte: 500 }, last: "30d" } }  // ≥ $500 in the last 30 days
+{ metric: { attrs: { event: "purchase" }, sum: { field: "value", gte: 500 } } }          // lifetime spend ≥ $500
+{ metric: { attrs: { event: "purchase" }, sum: { field: "value", gte: 500 }, last: "30d" } }  // ≥ $500 in 30d
+{ metric: { session: { utm_campaign: "spring_botox_2026" }, count: { gte: 1 } } }        // touched via a campaign
+{ metric: { attrs: { event: "pricing_view" }, last: "7d", count: { gte: 2 } } }          // ≥ 2 pricing views this week
 ```
 
 > **`sum` is currency-naive** — it adds raw `meta.value`. Mixed-currency bases must
 > filter to one currency (or normalize upstream); the metric won't do FX.
+>
+> **`session_id` is nullable** — events with no session don't match a `session`
+> filter (and group into a null bucket — §7).
+>
+> **Deprecated:** `content` (a substring match on `content_id`). `content_id` is
+> untrusted/opaque — nothing structural may depend on it. Use `attrs.event` for the
+> action and `session.utm_*` for acquisition instead. `content` keeps resolving
+> until the analytics layer migrates off it, then it is removed
+> ([event-attributes.md](event-attributes.md) §4/§7).
 
 ### `metric` vs `fact` — the rule
 
@@ -188,18 +206,35 @@ The query engine **retrieves data — it never writes prose.** Two projections:
 The selector is identical for both; the projection is *what you ask back*, not part
 of the predicate. A `people` projection saved + given a delivery **is an audience.**
 
-#### Grouping — time-series
+#### Grouping — time-series + breakdown
 
-By default `resolve()` returns one result. Trend charts (the
-[analytics concept](analytics-concept.md)) need a **series**, so a query
-takes an optional **`group: { by: "<bucket>" }`** that buckets a `metric`/`count`
-aggregate by time and returns `[{ bucket, value }]`:
+By default `resolve()` returns one result. Trend + breakdown charts (the
+[analytics concept](analytics-concept.md)) need a **series**, so a query takes an
+optional **`group: { by: "<bucket>", limit? }`** that buckets the
+`selector.filter.metric` aggregate and returns `[{ bucket, value }]`. The bucket is:
+
+| `by` | buckets on |
+|---|---|
+| `hour` · `day` · `week` · `month` | a time grain (labels sort chronologically) |
+| `channel` · `direction` · `source` | an exposure column |
+| `session:<utm_…>` | a session UTM column (via the `session_id` join) |
+| `attr:<key>` | a `meta` attribute (e.g. `attr:event`, `attr:campaign`) |
 
 ```js
-resolve({ filter: { metric: { content: "purchase", count: {} } } },
+resolve({ filter: { metric: { attrs: { event: "purchase" }, count: {} } } },
         { projection: "knowledge", group: { by: "week" } })
 // → [ { bucket: "2026-W10", value: 42 }, { bucket: "2026-W11", value: 51 }, … ]
+
+resolve({ filter: { metric: { attrs: { event: "email_click" }, count: {} } } },
+        { projection: "knowledge", group: { by: "session:utm_campaign" } })
+// → [ { bucket: "spring_botox_2026", value: 88 }, { bucket: null, value: 12 }, … ]
 ```
+
+- A `session:`/`attr:` bucket falls in a **`null`** bucket where the value is absent
+  (no session, or the key isn't on that event's `meta`).
+- **`limit`** is the high-cardinality guardrail: an open key (`attr:<raw>`, a url) can
+  produce thousands of buckets, so `limit: N` returns the **top-N by value** instead
+  of the full chronological series.
 
 Grouping the metric is the cheap path; sweeping `asOf` across buckets also works but
 costs N resolves. This is the one engine capability charts add; everything else is
