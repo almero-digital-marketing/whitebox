@@ -229,10 +229,14 @@ export function formatPopulationEvidence(groups) {
 // cohort's matching content. When it doesn't — a whole-base/overview question,
 // or a counting question — it falls back to a query-independent base sample so
 // the answer is still grounded instead of "nothing matched".
-export async function askPopulation({ question, similarity = 0.5, limit = 1000, sample = 60, instruction, schema } = {}) {
+export async function askPopulation({ question, similarity = 0.5, limit = 1000, sample = 60, instruction, schema, scope, last, from } = {}) {
+  // scope (a cohort's passport ids) + last/from (a window) confine BOTH the
+  // grounding aggregates and the evidence to the same structured slice, so the
+  // generated answer is "synthesize(question, query(scope, window, knowledge))"
+  // — not a wide-open read over the whole base, all time (docs/scoped-recall.md).
   const [stats, cohort] = await Promise.all([
-    populationStats ? populationStats() : Promise.resolve({ customers: 0, exposures: 0, breakdown: [] }),
-    population({ query: question, similarity, limit }),
+    populationStats ? populationStats({ scope, last, from }) : Promise.resolve({ customers: 0, exposures: 0, breakdown: [] }),
+    population({ query: question, similarity, limit, scope, last, from }),
   ])
 
   // Truly empty base — nothing to say (a schema caller still wants a result).
@@ -247,7 +251,7 @@ export async function askPopulation({ question, similarity = 0.5, limit = 1000, 
   // representative sample of the whole base instead of returning nothing.
   if (!groups.length && sampleContent) {
     overview = true
-    const rows = await sampleContent({ limit: sample })
+    const rows = await sampleContent({ limit: sample, scope, last, from })
     groups = rows.map(r => ({
       chunk_text: r.chunk_text, channel: r.channel, direction: r.direction,
       ts: r.ts, similarity: null, passport_count: Number(r.customers) || 0,

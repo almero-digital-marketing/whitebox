@@ -15,6 +15,18 @@ function toVectorLiteral(arr) {
   return `[${arr.join(',')}]`
 }
 
+// Resolve an optional time window to a cutoff Date for the population path
+// (docs/scoped-recall.md). `from` (ISO ts) wins; else `last` uses the selector
+// metric grammar (7d/30d/2w); else null (all time).
+const WIN_MS = { h: 3600e3, d: 86400e3, w: 604800e3 }
+function sinceFrom({ last, from } = {}) {
+  if (from) return new Date(from)
+  if (!last) return null
+  const m = /^(\d+)\s*(h|d|w)$/.exec(String(last).trim())
+  if (!m) throw new Error(`awareness: bad window "${last}" (use 7d, 24h, 2w)`)
+  return new Date(Date.now() - Number(m[1]) * WIN_MS[m[2]])
+}
+
 // Dependencies captured once via init() — module-level singleton, no
 // wrapping factory closure. Matches the core pattern (passports, sessions, …).
 let db
@@ -133,12 +145,20 @@ export async function recallChunks({ passport_id, embedding, limit = 10, offset 
 // Base-wide aggregates — no embedding, no query. Cheap counting for "how many
 // customers do we have / how active are they" and for grounding population-scope
 // answers even when a question maps to no semantic cohort.
-export async function populationStats() {
-  const totals = await db(EXPOSURES)
+export async function populationStats({ scope, last, from } = {}) {
+  // Confine the grounding aggregates to the same cohort/window as the evidence,
+  // so the LLM isn't told "12,000 customers" while answering about 43.
+  const since = sinceFrom({ last, from })
+  const confine = q => {
+    if (scope?.length) q = q.whereIn('passport_id', scope)
+    if (since) q = q.where('ts', '>=', since)
+    return q
+  }
+  const totals = await confine(db(EXPOSURES))
     .countDistinct({ customers: 'passport_id' })
     .count({ exposures: '*' })
     .first()
-  const breakdown = await db(EXPOSURES)
+  const breakdown = await confine(db(EXPOSURES))
     .select('channel', 'direction')
     .count({ exposures: '*' })
     .countDistinct({ customers: 'passport_id' })
@@ -162,7 +182,16 @@ export async function populationStats() {
 // what the most customers have in common), with an expression/conversation
 // tiebreak so the genuine "voice of the customer" outranks broadcast content of
 // equal reach, then recency.
-export async function sampleContent({ limit = 40 } = {}) {
+export async function sampleContent({ limit = 40, scope, last, from } = {}) {
+  // The overview/base-sample fallback is also evidence, so it honors the same
+  // cohort/window confinement (docs/scoped-recall.md). Both bound, both optional.
+  const since = sinceFrom({ last, from })
+  const binds = []
+  let confine = ''
+  if (scope?.length) { confine += ` AND passport_id IN (${scope.map(() => '?').join(', ')})`; binds.push(...scope) }
+  if (since) { confine += ' AND ts >= ?'; binds.push(since) }
+  binds.push(limit)
+
   const result = await db.raw(
       `WITH reach AS (
          SELECT content_hash,
@@ -171,7 +200,7 @@ export async function sampleContent({ limit = 40 } = {}) {
                 (ARRAY_AGG(channel   ORDER BY ts DESC))[1] AS channel,
                 (ARRAY_AGG(direction ORDER BY ts DESC))[1] AS direction
          FROM ${EXPOSURES}
-         WHERE content_hash IS NOT NULL
+         WHERE content_hash IS NOT NULL${confine}
          GROUP BY content_hash
        )
        SELECT r.customers, r.latest AS ts, r.channel, r.direction, c.chunk_text
@@ -182,7 +211,7 @@ export async function sampleContent({ limit = 40 } = {}) {
          (CASE WHEN r.direction IN ('expression', 'conversation') THEN 0 ELSE 1 END),
          r.latest DESC
        LIMIT ?`,
-    [limit]
+    binds
   )
   return result.rows ?? result
 }
@@ -192,8 +221,18 @@ export async function sampleContent({ limit = 40 } = {}) {
 // if its depth weight clears the threshold, so a heading-glance doesn't put a
 // passport in the cohort. Non-text exposures (mail/voip/crm — no depth signal)
 // always qualify.
-export async function populationChunks({ embedding, similarity = 0.75, limit = 1000, minEngagement = 0 }) {
+export async function populationChunks({ embedding, similarity = 0.75, limit = 1000, minEngagement = 0, scope, last, from } = {}) {
   const v = toVectorLiteral(embedding)
+  const since = sinceFrom({ last, from })
+
+  // Optional cohort/window confinement (docs/scoped-recall.md), both bound. Added
+  // to the exposure JOIN — `IN (?)` (knex expands the array) rather than ANY(?),
+  // which knex would mis-expand. `?` order matches the appended bindings.
+  const binds = [v, v, similarity, v, limit, minEngagement, minEngagement]
+  let confine = ''
+  if (scope?.length) { confine += ` AND e.passport_id IN (${scope.map(() => '?').join(', ')})`; binds.push(...scope) }
+  if (since) { confine += ' AND e.ts >= ?'; binds.push(since) }
+
   const result = await db.raw(
       `WITH matches AS (
          SELECT id, chunk_text, content_hash, 1 - (embedding <=> ?::vector) AS similarity
@@ -209,10 +248,10 @@ export async function populationChunks({ embedding, similarity = 0.75, limit = 1
          s.utm_term, s.utm_content, s.referrer
        FROM matches m
        JOIN ${EXPOSURES} e ON e.content_hash = m.content_hash
-         AND (?::float <= 0 OR (e.meta->>'engagement') IS NULL OR (e.meta->>'engagement')::float >= ?::float)
+         AND (?::float <= 0 OR (e.meta->>'engagement') IS NULL OR (e.meta->>'engagement')::float >= ?::float)${confine}
        LEFT JOIN ${SESSIONS} s ON s.id = e.session_id
        ORDER BY m.similarity DESC`,
-    [v, v, similarity, v, limit, minEngagement, minEngagement]
+    binds
   )
   return result.rows ?? result
 }

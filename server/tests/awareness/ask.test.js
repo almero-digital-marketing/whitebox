@@ -200,4 +200,24 @@ describe('awareness.askPopulation', () => {
     expect(out).toMatchObject({ theme: 'dashboard', cohort: { count: 0 } })
     expect(out.stats.customers).toBe(5)
   })
+
+  it('threads scope + window to BOTH grounding stats and recall (and the sample fallback)', async () => {
+    const { population, populationStats, sampleContent } = setup({
+      population: async () => ({ count: 0, passports: [] }),   // no cohort → overview fallback runs too
+      sampleContent: async () => [{ chunk_text: 'x', customers: 1, channel: 'web', direction: 'exposure' }],
+    })
+    await ask.askPopulation({ question: 'what are active customers complaining about?', scope: ['p1', 'p2'], last: '30d' })
+
+    // the grounding aggregates match the cohort/window, not the whole base
+    expect(populationStats).toHaveBeenCalledWith(expect.objectContaining({ scope: ['p1', 'p2'], last: '30d' }))
+    expect(population).toHaveBeenCalledWith(expect.objectContaining({ scope: ['p1', 'p2'], last: '30d' }))
+    expect(sampleContent).toHaveBeenCalledWith(expect.objectContaining({ scope: ['p1', 'p2'], last: '30d' }))
+  })
+
+  it('defaults (no scope/window) preserve whole-base behavior', async () => {
+    const { population, populationStats } = setup()
+    await ask.askPopulation({ question: 'anything?' })
+    expect(populationStats).toHaveBeenCalledWith(expect.objectContaining({ scope: undefined, last: undefined }))
+    expect(population).toHaveBeenCalledWith(expect.objectContaining({ scope: undefined, last: undefined }))
+  })
 })

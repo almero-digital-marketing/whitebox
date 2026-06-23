@@ -141,9 +141,9 @@ export async function population(args) {
   return query.population(args)
 }
 
-export async function populationStats() {
+export async function populationStats(args) {
   if (!enabled) return { customers: 0, exposures: 0, breakdown: [] }
-  return query.populationStats()
+  return query.populationStats(args)
 }
 
 export async function sampleContent(args) {
