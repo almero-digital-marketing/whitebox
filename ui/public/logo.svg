@@ -1,0 +1,51 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" role="img" aria-label="WhiteBox">
+<title>WhiteBox</title>
+<defs>
+  <linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="224.41" y1="135.30" x2="422.09" y2="82.33">
+    <stop offset="0" stop-color="#71C9C3"></stop>
+    <stop offset="1" stop-color="#273E84"></stop>
+  </linearGradient>
+  <linearGradient id="SVGID_2_" gradientUnits="userSpaceOnUse" x1="140.77" y1="140.05" x2="66.37" y2="417.73">
+    <stop offset="0" stop-color="#71C9C3"></stop>
+    <stop offset="1" stop-color="#273E84"></stop>
+  </linearGradient>
+  <linearGradient id="SVGID_3_" gradientUnits="userSpaceOnUse" x1="200.01" y1="199.98" x2="0.02" y2="-0.02">
+    <stop offset="0" stop-color="#E13B8B"></stop>
+    <stop offset="1" stop-color="#5A2972"></stop>
+  </linearGradient>
+  <linearGradient id="SVGID_4_" gradientUnits="userSpaceOnUse" x1="200.03" y1="199.97" x2="400.02" y2="399.95">
+    <stop offset="0" stop-color="#E13B8B"></stop>
+    <stop offset="1" stop-color="#5A2972"></stop>
+  </linearGradient>
+  <linearGradient id="SVGID_5_" gradientUnits="userSpaceOnUse" x1="260.20" y1="230.65" x2="400.01" y2="230.65">
+    <stop offset="0" stop-color="#000000"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="SVGID_6_" gradientUnits="userSpaceOnUse" x1="287.10" y1="112.89" x2="201.08" y2="26.88">
+    <stop offset="0" stop-color="#000000"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="SVGID_7_" gradientUnits="userSpaceOnUse" x1="112.98" y1="112.90" x2="26.94" y2="198.94">
+    <stop offset="0" stop-color="#000000"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="SVGID_8_" gradientUnits="userSpaceOnUse" x1="112.95" y1="287.06" x2="198.90" y2="373.01">
+    <stop offset="0" stop-color="#000000"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+</defs>
+<g>
+  <polygon fill="url(#SVGID_1_)" points="400,172.04 260.19,260.13 260.16,139.85 200.02,44.39 227.98,0 400,0"></polygon>
+  <polygon fill="url(#SVGID_2_)" points="171.94,400 0,400 0,227.21 139.87,139.85 139.85,260.18 200.3,356.07"></polygon>
+  <polygon fill="#273E84" points="260.16,139.85 200.02,44.39 227.98,0 400,0"></polygon>
+  <polygon fill="url(#SVGID_3_)" points="139.88,139.85 43.96,199.75 0,172.06 0,0.02 172.04,0.02 260.16,139.85"></polygon>
+  <polygon fill="url(#SVGID_4_)" points="400,400 227.98,399.99 139.87,260.16 260.16,260.16 353.64,201.25 400,227.97"></polygon>
+  <polygon fill="url(#SVGID_5_)" points="260.19,260.13 353.64,201.25 400,227.97"></polygon>
+  <polygon fill="url(#SVGID_6_)" points="260.16,139.85 200.02,44.39 227.98,0"></polygon>
+  <polygon fill="url(#SVGID_7_)" points="139.87,139.85 0.01,172.07 43.96,199.75"></polygon>
+  <polygon fill="url(#SVGID_8_)" points="171.94,400 139.87,260.16 200.3,356.07"></polygon>
+  <polygon fill="#273E84" points="260.19,260.11 353.64,201.25 399.99,227.98 400,400"></polygon>
+  <polygon fill="#273E84" points="139.87,260.15 200.3,356.07 171.94,400 0,400"></polygon>
+  <polygon fill="#273E84" points="139.87,139.86 43.96,199.75 0,172.06 0,0.02"></polygon>
+</g>
+</svg>

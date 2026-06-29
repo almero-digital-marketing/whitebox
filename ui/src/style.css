@@ -1,0 +1,36 @@
+/* Global theme + app shell. Module-specific layout lives in each module
+   (e.g. modules/analytics/analytics.css). Interactive elements are real PrimeVue
+   components styled by the Aura theme; our surfaces reference Aura's --p-* tokens. */
+:root {
+  --bg:          var(--p-surface-100, #f1f5f9);
+  --panel:       var(--p-content-background, #ffffff);
+  --panel-2:     var(--p-surface-100, #f1f5f9);
+  --border:      var(--p-content-border-color, #e2e8f0);
+  --border-2:    var(--p-surface-300, #cbd5e1);
+  --text:        var(--p-text-color, #1e293b);
+  --text-strong: var(--p-surface-900, #0f172a);
+  --muted:       var(--p-text-muted-color, #64748b);
+  --accent:      var(--p-primary-color, #6366f1);
+  --accent-soft: color-mix(in srgb, var(--p-primary-color, #6366f1) 12%, white);
+  --accent-2:    var(--p-teal-500, #14b8a6);
+  --danger:      var(--p-red-500, #ef4444);
+  --radius:      var(--p-content-border-radius, 10px);
+  --shadow:      0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+  --shadow-md:   0 6px 18px rgba(15,23,42,.10);
+  font-family: var(--p-font-family, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+}
+
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+.muted { color: var(--muted); }
+
+/* app shell — a VS Code-style activity bar on the left, the active module fills the rest */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+.module-host { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; background: var(--bg); }
+
+/* All confirm dialogs share one width. Without it each sizes to its message, so a long
+   one balloons toward full-viewport while a short one stays narrow. */
+.p-confirmdialog { width: 30rem; max-width: calc(100vw - 2rem); }
+/* …and a calmer message size (the default 16px reads oversized in these short prompts) */
+.p-confirmdialog-message { font-size: 13.5px; line-height: 1.5; }

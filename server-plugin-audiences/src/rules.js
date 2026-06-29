@@ -8,7 +8,9 @@ import { z } from 'zod'
 // The selector is validated deeply by the engine; here we only bound the
 // envelope and require the rule to actually narrow (an empty selector would mean
 // "everyone", never what an audience wants).
-const Selector = z.object({
+// Exported so the segment source schema (segments.js) reuses the exact same
+// selector / funnel / slot grammar — a segment is a rule's source minus delivery.
+export const Selector = z.object({
   about:  z.union([z.string(), z.object({}).passthrough()]).optional(),
   filter: z.any().optional(),
   judge:  z.object({
@@ -26,10 +28,13 @@ const FunnelStep = z.object({
   within: z.string().optional(),
   name: z.string().optional(),
 }).passthrough()
-const Funnel = z.object({
+export const Funnel = z.object({
   within: z.string().optional(),
   steps: z.array(FunnelStep).min(1),
 }).passthrough()
+
+// "step:N" | "gap:N→M" — the funnel slot selector.
+export const SLOT_RE = /^(step:\d+|gap:\d+→\d+)$/
 
 const Delivery = z.object({
   // Mode A only in v1: fire a custom event; the platform builds the audience.
@@ -46,7 +51,7 @@ export const RuleSchema = z.object({
 
   select: Selector.optional(),                          // source A: a selector
   funnel: Funnel.optional(),                            // source B: a funnel …
-  slot:   z.string().regex(/^(step:\d+|gap:\d+→\d+)$/, 'slot must be "step:N" or "gap:N→M"').optional(),
+  slot:   z.string().regex(SLOT_RE, 'slot must be "step:N" or "gap:N→M"').optional(),
   status: z.enum(['pending', 'dropped']).optional(),    // … gap slots: still-in-window vs closed
 
   ttl_days: z.number().int().positive().default(30),

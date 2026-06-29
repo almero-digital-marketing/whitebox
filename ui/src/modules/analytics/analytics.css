@@ -1,0 +1,59 @@
+/* Analytics module layout — the three-pane console (reports · compose · board).
+   Imported (unscoped, so it reaches the module's child components) by Analytics.vue.
+   Fills its host in the shell, not the viewport. */
+.console {
+  position: relative;
+  display: grid;
+  grid-template-columns: 300px 480px minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+.console > * { overflow: auto; }
+.left   { border-right: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; overflow: hidden; }
+/* the reports list flexes to fill so the bottom rail search sits flush at the pane's bottom */
+.left .list { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.center { border-right: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; }
+/* wrapper that carries the compose pane's v-show — a flex column so ComposePane's
+   sections stack exactly as when they were direct children of .center */
+.compose-host { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.right  { background: var(--panel); }
+/* Hide native scrollbars across the whole console chrome (incl. the compose pane's
+   overlay scrollbar that was peeking beside the seam handle). The board re-enables a
+   slim styled scrollbar on its right edge — far from the handle. PrimeVue dropdowns
+   are portaled to <body>, outside .console, so their scrollbars are untouched. */
+.console * { scrollbar-width: none; }
+.console *::-webkit-scrollbar { width: 0; height: 0; }
+.right { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+.right::-webkit-scrollbar { width: 11px; height: 11px; }
+.right::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 999px; border: 3px solid var(--panel); background-clip: padding-box; }
+.right::-webkit-scrollbar-track { background: transparent; }
+/* collapsed: the compose column drops to 0 (its content is v-show'd off) and the
+   board fills the freed space. The center stays a grid item so the board keeps
+   track 3 — display:none would shift it into the empty track. */
+.console.center-collapsed { grid-template-columns: 300px 0 minmax(0, 1fr); }
+.console.center-collapsed .center { overflow: hidden; border-right: none; }
+
+/* seam handle — a fixed pill just inside the board's left edge that collapses/
+   expands the compose pane. Its `left` is set reactively from the board's measured
+   edge (Analytics.vue) so it never overlaps the adjacent pane's right-edge scrollbar. */
+.seam-toggle {
+  position: fixed; top: 50%; transform: translateY(-50%);
+  z-index: 40; width: 24px; height: 46px;
+  display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); color: var(--muted); cursor: pointer;
+  box-shadow: var(--shadow-md); transition: background .12s, color .12s;
+}
+.seam-toggle:hover { background: var(--panel-2); color: var(--text); }
+.seam-toggle .pi { font-size: 13px; }
+
+.pane-head {
+  height: 52px; flex: none;
+  padding: 0 12px 0 18px; gap: 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.err { color: var(--danger); font-size: 13px; padding: 0 18px; }

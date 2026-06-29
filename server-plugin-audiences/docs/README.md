@@ -21,6 +21,9 @@ Everything you need to take this from a scaffold to a working integration.
    sensitive-category guard, and the GDPR audit trail.
 9. **[09 · API](09-api.md)** — the full REST + MCP reference and the two-tier auth model.
 10. **[10 · Deployment](10-deployment.md)** — config, env vars, the queue, scheduling, and migrations.
+11. **[11 · Segments & audiences](11-segments-and-audiences.md)** — the evolution: chart-derived
+    **segments** → `AND/OR/NOT` **audiences** as the shared, activation-agnostic targeting layer used by
+    both ad-network delivery **and** the campaigns module (email/SMS).
 
 ## The 60-second mental model
 

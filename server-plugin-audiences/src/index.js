@@ -65,6 +65,9 @@ export function audiences(options = {}) {
 
       service.init({ store, rules, evaluator, delivery, adapters, identity, consent, logger })
 
+      // seed the built-in "Everyone" segment (idempotent) — the universal building block
+      service.ensureDefaultSegments().catch(err => logger.warn({ err }, 'audiences: ensureDefaultSegments failed'))
+
       // --- REST (privileged management tier) ---
       rest.register(app, { service, secret: cfg.auth?.secret, logger })
 

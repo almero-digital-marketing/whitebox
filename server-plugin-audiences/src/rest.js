@@ -23,6 +23,44 @@ export function register(app, { service, secret, logger }) {
 
   const r = (method, path, fn) => app[method](`/audiences${path}`, auth, wrap(fn))
 
+  // segments — chart-derived dynamic sub-queries (the atom of the audience layer)
+  r('post',   '/segments/preview', async (req) => service.previewSegment(req.body?.source ?? req.body))
+  r('post',   '/segments/name',    async (req) => service.nameSegment(req.body?.source ?? req.body, req.body?.context))
+  r('get',    '/segments',         async () => service.listSegments())
+  r('post',   '/segments',         async (req) => service.saveSegment(req.body || {}))
+  r('get',    '/segments/:id',     async (req) => {
+    const seg = await service.getSegment(req.params.id)
+    if (!seg) { const e = new Error('segment not found'); e.status = 404; throw e }
+    return seg
+  })
+  r('patch',  '/segments/:id',     async (req) => service.renameSegment(req.params.id, req.body?.name))
+  r('delete', '/segments/:id',     async (req) => ({ deleted: await service.deleteSegment(req.params.id) }))
+  r('get',    '/segments/:id/members', async (req) => service.resolveSegment(req.params.id, { limit: +req.query.limit || 5000 }))
+
+  // audiences — boolean compositions of segments (the deliverable audience layer)
+  r('post',   '/audiences/preview', async (req) => service.previewAudience(req.body?.rule ?? req.body))
+  r('post',   '/audiences/name',    async (req) => service.nameAudience(req.body?.rule ?? req.body))
+  // membership — which audiences this passport is in (reported to the client by activation_id)
+  r('get',    '/audiences/memberships/:passportId', async (req) => service.passportAudiences(req.params.passportId))
+  r('get',    '/audiences/by-activation-id/:activationId', async (req) => {
+    const a = await service.getAudienceByActivationId(req.params.activationId)
+    if (!a) { const e = new Error('audience not found'); e.status = 404; throw e }
+    return a
+  })
+  r('get',    '/audiences',         async () => service.listAudiences())
+  r('post',   '/audiences',         async (req) => service.saveAudience(req.body || {}))
+  r('get',    '/audiences/:id',     async (req) => {
+    const a = await service.getAudience(req.params.id)
+    if (!a) { const e = new Error('audience not found'); e.status = 404; throw e }
+    return a
+  })
+  r('delete', '/audiences/:id',     async (req) => ({ deleted: await service.deleteAudience(req.params.id) }))
+  r('get',    '/audiences/:id/members', async (req) => service.resolveAudience(req.params.id, { limit: Math.min(+req.query.limit || 1000, 5000) }))
+  r('post',   '/audiences/:id/delivery/preview', async (req) => service.previewDelivery(req.params.id))
+  r('post',   '/audiences/:id/delivery', async (req) => service.setDelivery(req.params.id, { network: req.body?.network, enabled: !!req.body?.enabled }))
+  r('post',   '/audiences/:id/client-side', async (req) => service.setClientSide(req.params.id, !!req.body?.enabled))
+  r('post',   '/audiences/:id/campaigns', async (req) => service.setCampaigns(req.params.id, !!req.body?.enabled))
+
   // rules
   r('get',    '/rules',          async (req) => service.listRules())
   r('post',   '/rules',          async (req) => service.saveRule(req.body, req.get('x-actor')))

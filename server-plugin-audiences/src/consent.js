@@ -22,6 +22,23 @@ export async function allowed(passportId) {
   return { ok: true }
 }
 
+// Batched gate for a whole cohort — same verdicts as allowed(), but the suppression
+// check is ONE query for the set (not N sequential round-trips). The consent check only
+// runs on the survivors, and only when a category is required (skipped otherwise), so the
+// common case is a single DB call. Returns { deliverable: pid[], suppressed, no_consent }.
+export async function allowedCohort(ids) {
+  const suppressedSet = await store.suppressedAmong(ids)
+  const category = config.requireConsentCategory
+  const deliverable = []
+  let suppressed = 0, no_consent = 0
+  for (const pid of ids) {
+    if (suppressedSet.has(pid)) { suppressed++; continue }
+    if (category && !(await hasConsent(pid, category))) { no_consent++; continue }
+    deliverable.push(pid)
+  }
+  return { deliverable, suppressed, no_consent }
+}
+
 // Marketing consent per passport. Wire this to however you store consent —
 // e.g. a passport flag written at /sessions/resolve from the client consent
 // module, or a context provider. Default-deny when a category is required.

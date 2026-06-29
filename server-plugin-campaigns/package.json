@@ -1,0 +1,27 @@
+{
+  "name": "whitebox-pro-server-plugin-campaigns",
+  "version": "0.1.0",
+  "description": "WhiteBox server — campaigns plugin. Plan & execute email/SMS campaigns to audiences. Mikser upserts campaign content; the UI attaches audiences (many-to-many) and sends. v1 is dry-run.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.4.0"
+  },
+  "peerDependencies": {
+    "whitebox-pro-server": "^2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0"
+  }
+}
